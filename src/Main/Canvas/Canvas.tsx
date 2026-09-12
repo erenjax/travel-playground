@@ -486,7 +486,7 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
           onSelect={(id) => updateMyPresence({ selectedEdgeId: id, selectedCardId: null })}
         />
 
-        {Object.values(cards).map((card) => (
+        {Object.values(cards).map((card, index) => (
           <CardErrorBoundary key={card.id}>
             <Card
               card={card}
@@ -510,6 +510,7 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
               onVote={(id, value) => setCardVote(id, getVoterId(), myUser.name, value)}
               onDelete={deleteCard}
               onResize={rememberCardSize}
+              tilt={index % 2 === 0 ? -2.5 : 2.5}
             />
           </CardErrorBoundary>
         ))}
