@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
 import { Link, useParams } from 'react-router-dom'
 import type { CanvasCategory } from '../liveblocks/types'
@@ -8,6 +8,9 @@ import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
 import { useSuggestions } from '../hooks/useSuggestions'
 import { CATEGORIES } from './categories'
+import { CATEGORY_KIND } from './categories'
+import { summarizeGroupVotes } from '../lib/cardVotes'
+import type { Card as CardData } from '../liveblocks/types'
 
 export function Main() {
   const [sidebarWidth, setSidebarWidth] = useState(260)
@@ -20,10 +23,16 @@ export function Main() {
   const updateMyPresence = useUpdateMyPresence()
   const cameraControls = useCamera(category)
   const { roomId } = useParams()
+  const cards = useStorage((root) => root.cards)
   const startDate = useStorage((root) => root.startDate)
   const endDate = useStorage((root) => root.endDate)
   const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
   const placeLabel = destination?.label.trim() ?? ''
+  const topContenders = useMemo(() => {
+    const kind = CATEGORY_KIND[category]
+    const categoryCards = Object.values(cards).filter((card): card is CardData => card.content._tag === kind)
+    return summarizeGroupVotes(categoryCards).ranking.filter((card) => card.score > 0).slice(0, 3)
+  }, [cards, category])
 
   function selectCategory(next: CanvasCategory) {
     if (next === category) return
@@ -98,6 +107,24 @@ export function Main() {
           </button>
         )}
       </header>
+      <div className="top-contenders-bar" aria-label="Top contenders">
+        <span className="top-contenders-label">Top contenders</span>
+        <div className="top-contenders-list">
+          {topContenders.map((contender, index) => (
+            <button
+              key={contender.cardId}
+              type="button"
+              className="top-contender"
+              onClick={() => updateMyPresence({ selectedCardId: contender.cardId, selectedEdgeId: null })}
+              aria-label={`Top contender ${index + 1}: ${contenderName(contender.content)}, score ${contender.score}`}
+            >
+              <span className="top-contender-rank">{index + 1}</span>
+              <span className="top-contender-content">{contenderName(contender.content)}</span>
+              <span className="top-contender-score">{contender.score > 0 ? '+' : ''}{contender.score}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       {CATEGORIES.map((item) => (
         <div
           key={item}
@@ -124,4 +151,19 @@ export function Main() {
       ))}
     </div>
   )
+}
+
+function contenderName(content: CardData['content']) {
+  switch (content._tag) {
+    case 'HotelCard':
+    case 'AttractionCard':
+    case 'FoodCard':
+      return content.data.name
+    case 'FlightCard':
+      return `${content.data.departure.place.label} → ${content.data.arrival.place.label}`
+    case 'PhotoCard':
+      return content.data.caption ?? 'Photo'
+    case 'BlankCard':
+      return content.data.text || 'Blank card'
+  }
 }
