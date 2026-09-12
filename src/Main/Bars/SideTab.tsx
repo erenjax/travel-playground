@@ -1,36 +1,55 @@
 import { useRef, useState, type PointerEvent } from 'react'
-import { CARD_KIND_HINTS, CARD_KIND_LABELS } from '../cardContent'
+import { CardBody } from '../Canvas/CardBody'
 import { CARD_MIME } from '../cardMime'
-import type { CardKind, CanvasCategory } from '../../liveblocks/types'
+import type { CanvasCategory } from '../../liveblocks/types'
+import { SUGGESTION_LIMIT, SUGGESTION_MIME, suggestionContent, type Suggestion, type SuggestionResults } from '../suggestions'
 import { CATEGORY_KIND } from '../categories'
 
 const MIN_WIDTH = 260
 const MAX_WIDTH = 600
 
-function CardChip({ kind }: { kind: CardKind }) {
+function SuggestionCard({ category, suggestion, index }: { category: CanvasCategory; suggestion: Suggestion; index: number }) {
+  const kind = CATEGORY_KIND[category]
   return (
     <div
-      className="side-tab-card"
+      className="side-tab-card suggestion-card"
+      role="listitem"
+      aria-label={`${suggestion.name}, drag to the canvas`}
+      title="Drag this card onto the canvas"
       draggable
       onDragStart={(event) => {
         event.dataTransfer.setData(CARD_MIME, kind)
-        event.dataTransfer.setData('text/plain', CARD_KIND_LABELS[kind])
+        event.dataTransfer.setData(SUGGESTION_MIME, JSON.stringify(suggestion))
+        event.dataTransfer.setData('text/plain', suggestion.name)
         event.dataTransfer.effectAllowed = 'copy'
       }}
     >
-      <span className="side-tab-card-title">{CARD_KIND_LABELS[kind]}</span>
-      <span className="side-tab-card-hint">{CARD_KIND_HINTS[kind]}</span>
+      <div className="suggestion-card-header">
+        <span>Option {index + 1}</span>
+        <span aria-hidden="true">⠿</span>
+      </div>
+      <CardBody content={suggestionContent(category, suggestion)} />
+      <p className="suggestion-card-description">{suggestion.description}</p>
+      <div className="suggestion-card-footer">
+        <span>Drag onto canvas</span>
+        {suggestion.website && <a href={suggestion.website} target="_blank" rel="noreferrer" draggable={false}>Website ↗</a>}
+      </div>
     </div>
   )
 }
 
 type SideTabProps = {
+  location: string
+  locationDraft: string
+  onLocationDraftChange: (value: string) => void
+  onSearch: () => void
+  search: { data?: SuggestionResults; error?: string; loading: boolean; retry: () => void }
   category: CanvasCategory
   width: number
   onResize: (width: number) => void
 }
 
-export function SideTab({ category, width, onResize }: SideTabProps) {
+export function SideTab({ category, width, onResize, location, locationDraft, onLocationDraftChange, onSearch, search }: SideTabProps) {
   const resizeStart = useRef<{ pointerId: number; x: number; width: number } | null>(null)
   const [resizing, setResizing] = useState(false)
 
@@ -91,9 +110,42 @@ export function SideTab({ category, width, onResize }: SideTabProps) {
       <div className="side-tab-header">
         <span>{category} cards</span>
       </div>
-      <div className="side-tab-body">
-        <CardChip kind={CATEGORY_KIND[category]} />
-        <p className="side-tab-hint">Drag onto the {category.toLowerCase()} canvas</p>
+      <form className="location-search" onSubmit={(event) => { event.preventDefault(); onSearch() }}>
+        <label htmlFor="suggestion-location">Location</label>
+        <input
+          id="suggestion-location"
+          value={locationDraft}
+          onChange={(event) => onLocationDraftChange(event.target.value)}
+          placeholder="City or neighborhood"
+          maxLength={200}
+          required
+        />
+        <button type="submit" disabled={!locationDraft.trim() || search.loading}>
+          {search.loading ? 'Searching…' : 'Find 3 options'}
+        </button>
+      </form>
+      <div className="side-tab-body" aria-busy={search.loading}>
+        <div role="status" className="side-tab-hint">
+          {!location ? 'Enter a location to find places for your trip.' : search.loading
+            ? `Finding ${category === 'Food' ? 'restaurants' : category.toLowerCase()} in ${location}…`
+            : search.data ? `${search.data.suggestions.length} suggestions in ${location}` : null}
+        </div>
+        {search.error && <div role="alert" className="suggestion-error">
+          <p>{search.error}</p>
+          <button type="button" onClick={search.retry}>Try again</button>
+        </div>}
+        {search.data?.suggestions.length === 0 && <p className="side-tab-hint">No suggestions found. Try a more specific city or neighborhood.</p>}
+        {Boolean(search.data?.suggestions.length) && <p className="side-tab-hint">Drag a suggestion onto the canvas</p>}
+        <div className="suggestion-card-list" role="list" aria-label={`${category} card options`}>
+          {search.data?.suggestions.slice(0, SUGGESTION_LIMIT).map((suggestion, index) => (
+            <SuggestionCard key={`${suggestion.name}-${index}`} category={category} suggestion={suggestion} index={index} />
+          ))}
+        </div>
+        {Boolean(search.data?.sources.length) && <details className="suggestion-sources">
+          <summary>Search sources</summary>
+          {search.data?.sources.map((source, index) => <a key={index} href={source.url} target="_blank" rel="noreferrer">{source.title}</a>)}
+        </details>}
+
       </div>
     </aside>
   )

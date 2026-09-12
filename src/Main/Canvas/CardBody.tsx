@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { CardContent, FlightStop, Money } from '../../liveblocks/types'
 import { CARD_KIND_LABELS } from '../cardContent'
 
@@ -57,17 +58,33 @@ function joinMeta(parts: readonly (string | undefined)[]) {
   return parts.filter(Boolean).join(' · ')
 }
 
-type ImageProps = { src: string; alt: string; tall?: boolean }
+type ImageProps = { src: string; alt: string; tall?: boolean; sourceUrl?: string }
 
-function CardImage({ src, alt, tall }: ImageProps) {
+function CardImage({ src, alt, tall, sourceUrl }: ImageProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  if (!src || failedSrc === src) {
+    return <div className="card-image-unavailable">Photo unavailable</div>
+  }
   return (
-    <img
-      className={tall ? 'card-image card-image-tall' : 'card-image'}
-      src={src}
-      alt={alt}
-      // The card handles its own pointer drag; a native image drag would fight it.
-      draggable={false}
-    />
+    <>
+      <img
+        className={tall ? 'card-image card-image-tall' : 'card-image'}
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailedSrc(src)}
+        draggable={false}
+      />
+      {sourceUrl && <a
+        className="card-image-source"
+        href={sourceUrl}
+        target="_blank"
+        rel="noreferrer"
+        draggable={false}
+        onPointerDown={(event) => event.stopPropagation()}
+      >Photo source ↗</a>}
+    </>
   )
 }
 
@@ -77,16 +94,16 @@ export function CardBody({ content }: { content: CardContent }) {
 
   switch (content._tag) {
     case 'HotelCard': {
-      const { name, imageUrl, location, price, checkIn, checkOut } = content.data
+      const { name, imageUrl, imageSourceUrl, location, price, checkIn, checkOut } = content.data
       return (
         <>
-          <CardImage src={imageUrl} alt={name} />
+          <CardImage src={imageUrl || ''} alt={name} sourceUrl={imageSourceUrl} />
           <div className="card-lines">
             {kind}
             <span className="card-title">{name}</span>
             <span className="card-meta">{location.label}</span>
             <span className="card-meta">
-              {joinMeta([`${formatDay(checkIn)} – ${formatDay(checkOut)}`, formatMoney(price)])}
+              {joinMeta([checkIn && checkOut ? `${formatDay(checkIn)} – ${formatDay(checkOut)}` : 'Dates not set', price ? formatMoney(price) : undefined])}
             </span>
           </div>
         </>
@@ -111,7 +128,7 @@ export function CardBody({ content }: { content: CardContent }) {
     }
 
     case 'AttractionCard': {
-      const { name, location, imageUrl, price, startsAt, endsAt } = content.data
+      const { name, location, imageUrl, imageSourceUrl, price, startsAt, endsAt } = content.data
       const when = startsAt
         ? joinMeta([
             `${formatDay(startsAt)} ${formatClock(startsAt)}`,
@@ -120,7 +137,7 @@ export function CardBody({ content }: { content: CardContent }) {
         : undefined
       return (
         <>
-          {imageUrl ? <CardImage src={imageUrl} alt={name} /> : null}
+          <CardImage src={imageUrl || ''} alt={name} sourceUrl={imageSourceUrl} />
           <div className="card-lines">
             {kind}
             <span className="card-title">{name}</span>
@@ -134,10 +151,10 @@ export function CardBody({ content }: { content: CardContent }) {
     }
 
     case 'FoodCard': {
-      const { name, location, cuisine, priceLevel, reservationAt, imageUrl } = content.data
+      const { name, location, cuisine, priceLevel, reservationAt, imageUrl, imageSourceUrl } = content.data
       return (
         <>
-          {imageUrl ? <CardImage src={imageUrl} alt={name} /> : null}
+          <CardImage src={imageUrl || ''} alt={name} sourceUrl={imageSourceUrl} />
           <div className="card-lines">
             {kind}
             <span className="card-title">{name}</span>

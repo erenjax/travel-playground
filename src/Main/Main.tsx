@@ -6,12 +6,16 @@ import { formatTripRange } from '../lib/tripDraft'
 import { Canvas } from './Canvas/Canvas'
 import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
+import { useSuggestions } from '../hooks/useSuggestions'
 import { CATEGORIES } from './categories'
 
 export function Main() {
+  const [location, setLocation] = useState('')
+  const [locationDraft, setLocationDraft] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [category, setCategory] = useState<CanvasCategory>('Hotels')
   const [copied, setCopied] = useState(false)
+  const search = useSuggestions(category, location)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
   const cameraControls = useCamera(category)
@@ -109,7 +113,21 @@ export function Main() {
           {category === item && (
             <>
               <Canvas category={item} cameraControls={cameraControls} />
-              <SideTab category={item} width={sidebarWidth} onResize={setSidebarWidth} />
+              <SideTab
+                category={item}
+                width={sidebarWidth}
+                onResize={setSidebarWidth}
+                location={location}
+                locationDraft={locationDraft}
+                onLocationDraftChange={setLocationDraft}
+                onSearch={() => {
+                  const next = locationDraft.trim()
+                  if (!next) return
+                  if (next === location) search.retry()
+                  else setLocation(next)
+                }}
+                search={search}
+              />
             </>
           )}
         </div>

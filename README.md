@@ -76,3 +76,26 @@ export default defineConfig([
 ])
 
 ```
+
+## Location suggestions
+
+Set `GROK_API_KEY` in `.env.local` and run `npm run dev`. The existing
+`VITE_GROK_API_KEY` is also accepted server-side for compatibility; the UI does not
+read it. `GROK_MODEL` defaults to `grok-4.6`. The model must support
+web search together with structured JSON output.
+
+Enter a city or neighborhood in the sidebar and select **Find 3 options**.
+Switching Hotels, Attractions, or Food searches that category for the same location.
+Results are cached in the browser for the session and on the server for 30 minutes
+(up to 100 location/category searches). Identical pending searches share one Grok
+request, including when a browser reconnects. Submitting the same location reuses
+server results until they expire. The server cache resets when the server restarts.
+Grok uses low reasoning effort and a brief web lookup to reduce search overhead.
+Image search finds a photo of each specific place when available; photo URLs and
+source links are cached with the suggestions and saved when a card is dropped.
+Drag a result onto its canvas to save its name and address. Search does not assign
+booking dates, prices, or unrelated placeholder photos.
+
+`/api/suggestions` runs in the Vite development and preview servers. A static-only
+deployment needs a server hosting this endpoint and the private Grok key.
+See [xAI’s web search documentation](https://docs.x.ai/developers/tools/web-search).
