@@ -206,6 +206,8 @@ export type Storage = {
   destination: Place
   startDate: string
   endDate: string
+  itinerary: string
+  itineraryStatus: string
   messages: LiveList<ChatItem>
 }
 

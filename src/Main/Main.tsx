@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { shallow } from '@liveblocks/client'
-import { useOthers, useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
+import { useMutation, useOthers, useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
 import { Link, useParams } from 'react-router-dom'
 import type { CanvasCategory } from '../liveblocks/types'
 import { resolvePlaceAnchor, showAnchorOnTab, type LastSpot } from '../lib/placeAnchor'
@@ -28,9 +28,18 @@ export function Main() {
   const [itineraryBusy, setItineraryBusy] = useState(false)
   const [itineraryError, setItineraryError] = useState('')
   const destination = useStorage((root) => root.destination)
+  const publishedItinerary = useStorage((root) => root.itinerary)
+  const itineraryStatus = useStorage((root) => root.itineraryStatus)
   const tripTitle = useStorage((root) => root.tripTitle)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
+  const publishItinerary = useMutation(({ storage }, value: string) => {
+    storage.set('itinerary', value)
+    storage.set('itineraryStatus', 'ready')
+  }, [])
+  const setItineraryStatus = useMutation(({ storage }, status: string) => {
+    storage.set('itineraryStatus', status)
+  }, [])
   const myUser = useSelf((me) => me.presence.user, shallow)
   const others = useOthers()
   const cameraControls = useCamera(category === 'Itinerary' ? 'Hotels' : category)
@@ -43,16 +52,29 @@ export function Main() {
   const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
   const placeLabel = destination?.label.trim() ?? ''
   const anchor = resolvePlaceAnchor(lastSpot, destination)
+  useEffect(() => {
+    if (!publishedItinerary) return
+    try {
+      setItinerary(JSON.parse(publishedItinerary) as Itinerary)
+    } catch {
+      setItineraryError('The shared itinerary could not be loaded.')
+    }
+  }, [publishedItinerary])
   async function createItinerary() {
     setItineraryBusy(true)
     setItineraryError('')
+    setItineraryStatus('generating')
     try {
       const response = await fetch('/api/itinerary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destination: placeLabel, startDate, endDate, cards: Object.values(cards).map((card) => ({ id: card.id, type: card.content._tag, name: contenderName(card.content), address: 'location' in card.content.data ? card.content.data.location.label : '', cuisine: card.content._tag === 'FoodCard' ? card.content.data.cuisine ?? '' : '' })), edges: Object.values(edges).filter((edge) => edge.arrow && edge.arrow !== 'none').map((edge) => ({ from: edge.from.cardId, to: edge.to.cardId, arrow: edge.arrow })) }) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Could not create itinerary.')
       setItinerary(data)
+      publishItinerary(JSON.stringify(data))
       setCategory('Itinerary')
-    } catch (error) { setItineraryError(error instanceof Error ? error.message : 'Could not create itinerary.') }
+    } catch (error) {
+      setItineraryError(error instanceof Error ? error.message : 'Could not create itinerary.')
+      setItineraryStatus('idle')
+    }
     finally { setItineraryBusy(false) }
   }
   const topContenders = useMemo(() => {
@@ -138,7 +160,7 @@ export function Main() {
             </svg>
             {copied ? 'Shared' : 'Share'}
           </button>
-          <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || Object.keys(cards).length === 0}>
+          <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || itineraryStatus === 'generating' || Boolean(publishedItinerary) || Object.keys(cards).length === 0}>
             {itineraryBusy ? 'Creating…' : 'Create itinerary'}
           </button>
         </div>}
