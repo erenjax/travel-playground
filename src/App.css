@@ -529,6 +529,52 @@
   color: var(--text-h);
 }
 
+.side-tab-categories {
+  display: flex;
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.side-tab-category {
+  flex: 1;
+  padding: 12px 4px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.side-tab-category:hover {
+  background: var(--canvas-bg);
+}
+
+.side-tab-category[aria-selected='true'] {
+  border-bottom-color: var(--text-h);
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.side-tab-category:focus-visible,
+.side-tab-body:focus-visible {
+  outline: 2px solid var(--text-h);
+  outline-offset: -2px;
+}
+
+.side-tab-panel-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.side-tab-body[hidden] {
+  display: none;
+}
+
 .side-tab-body {
   flex: 1;
   min-height: 0;
