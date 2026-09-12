@@ -148,17 +148,6 @@
   box-shadow: 0 1px 0 var(--text-h);
 }
 
-.primary-button {
-  font: inherit;
-  font-size: 13px;
-  padding: 5px 10px;
-  border: none;
-  border-radius: 6px;
-  background: var(--text-h);
-  color: #fff;
-  cursor: pointer;
-}
-
 .connected-users {
   display: flex;
   align-items: center;
@@ -229,10 +218,19 @@
 
 /* Zoom controls */
 
-.zoom-controls {
+/* Canvas controls */
+
+.canvas-controls {
   position: absolute;
   right: 272px;
   bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-controls {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -524,8 +522,6 @@
   height: 48px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   padding: 0 14px;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
@@ -537,12 +533,38 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 14px;
 }
 
-.side-tab-placeholder {
-  font-size: 13px;
+.side-tab-card {
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-h);
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: grab;
+  user-select: none;
+}
+
+.side-tab-card:active {
+  cursor: grabbing;
+}
+
+.side-tab-hint {
+  font-size: 12px;
   color: var(--text);
+}
+
+.canvas-drop-active {
+  outline: 2px dashed var(--text);
+  outline-offset: -6px;
 }
 
 /* Remote cursors */
