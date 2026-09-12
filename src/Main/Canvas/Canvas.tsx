@@ -16,7 +16,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react'
-import type { AnchorSide, CanvasCategory, CanvasUser, CardKind, Edge, EdgeEndpoint, VoteValue } from '../../liveblocks/types'
+import type { AnchorSide, CanvasCategory, CanvasUser, CardContent, Edge, EdgeEndpoint, VoteValue } from '../../liveblocks/types'
 import { toggleCardVote } from '../../lib/cardVotes'
 import { getVoterId } from '../../lib/voterId'
 import { defaultContentFor, parseCardKind } from '../cardContent'

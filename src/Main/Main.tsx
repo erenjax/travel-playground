@@ -10,17 +10,16 @@ import { useSuggestions } from '../hooks/useSuggestions'
 import { CATEGORIES } from './categories'
 
 export function Main() {
-  const [location, setLocation] = useState('')
-  const [locationDraft, setLocationDraft] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [category, setCategory] = useState<CanvasCategory>('Hotels')
   const [copied, setCopied] = useState(false)
-  const search = useSuggestions(category, location)
+  const destination = useStorage((root) => root.destination)
+  const location = destination?.label ?? ''
+  const searches = useSuggestions(location)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
   const cameraControls = useCamera(category)
   const { roomId } = useParams()
-  const destination = useStorage((root) => root.destination)
   const startDate = useStorage((root) => root.startDate)
   const endDate = useStorage((root) => root.endDate)
   const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
@@ -117,16 +116,7 @@ export function Main() {
                 category={item}
                 width={sidebarWidth}
                 onResize={setSidebarWidth}
-                location={location}
-                locationDraft={locationDraft}
-                onLocationDraftChange={setLocationDraft}
-                onSearch={() => {
-                  const next = locationDraft.trim()
-                  if (!next) return
-                  if (next === location) search.retry()
-                  else setLocation(next)
-                }}
-                search={search}
+                search={searches.forCategory(item)}
               />
             </>
           )}

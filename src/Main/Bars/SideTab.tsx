@@ -39,17 +39,13 @@ function SuggestionCard({ category, suggestion, index }: { category: CanvasCateg
 }
 
 type SideTabProps = {
-  location: string
-  locationDraft: string
-  onLocationDraftChange: (value: string) => void
-  onSearch: () => void
   search: { data?: SuggestionResults; error?: string; loading: boolean; retry: () => void }
   category: CanvasCategory
   width: number
   onResize: (width: number) => void
 }
 
-export function SideTab({ category, width, onResize, location, locationDraft, onLocationDraftChange, onSearch, search }: SideTabProps) {
+export function SideTab({ category, width, onResize, search }: SideTabProps) {
   const resizeStart = useRef<{ pointerId: number; x: number; width: number } | null>(null)
   const [resizing, setResizing] = useState(false)
 
@@ -110,25 +106,9 @@ export function SideTab({ category, width, onResize, location, locationDraft, on
       <div className="side-tab-header">
         <span>{category} cards</span>
       </div>
-      <form className="location-search" onSubmit={(event) => { event.preventDefault(); onSearch() }}>
-        <label htmlFor="suggestion-location">Location</label>
-        <input
-          id="suggestion-location"
-          value={locationDraft}
-          onChange={(event) => onLocationDraftChange(event.target.value)}
-          placeholder="City or neighborhood"
-          maxLength={200}
-          required
-        />
-        <button type="submit" disabled={!locationDraft.trim() || search.loading}>
-          {search.loading ? 'Searching…' : 'Find 3 options'}
-        </button>
-      </form>
       <div className="side-tab-body" aria-busy={search.loading}>
         <div role="status" className="side-tab-hint">
-          {!location ? 'Enter a location to find places for your trip.' : search.loading
-            ? `Finding ${category === 'Food' ? 'restaurants' : category.toLowerCase()} in ${location}…`
-            : search.data ? `${search.data.suggestions.length} suggestions in ${location}` : null}
+          {search.loading ? `Finding ${category === 'Food' ? 'restaurants' : category.toLowerCase()}…` : search.data ? `${search.data.suggestions.length} suggestions` : null}
         </div>
         {search.error && <div role="alert" className="suggestion-error">
           <p>{search.error}</p>
