@@ -136,8 +136,8 @@ export type CardContent =
 
 export type CardKind = CardContent['_tag']
 
-/** `1` is an upvote, `-1` a downvote. A person with no entry has not voted. */
-export type VoteValue = 1 | -1
+/** `2` is a heart, `1` is +1, `-1` is thumbs down. No entry means not voted. */
+export type VoteValue = 2 | 1 | -1
 
 export type CardVote = {
   readonly voterId: string

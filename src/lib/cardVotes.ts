@@ -23,13 +23,13 @@ export type GroupVoteSummary = {
 }
 
 /** Liveblocks can hand back a missing/legacy field as a plain object, which is not iterable. */
-function voteList(votes: Card['votes'] | unknown): CardVote[] {
+export function voteList(votes: Card['votes'] | unknown): CardVote[] {
   if (Array.isArray(votes)) return votes
   if (!votes || typeof votes !== 'object') return []
   return Object.entries(votes).flatMap(([key, value]) => {
     if (!value || typeof value !== 'object') return []
     const vote = value as { voterId?: string; name?: string; value?: VoteValue }
-    if (vote.value !== 1 && vote.value !== -1) return []
+    if (vote.value !== 2 && vote.value !== 1 && vote.value !== -1) return []
     return [{
       voterId: vote.voterId ?? key,
       name: typeof vote.name === 'string' ? vote.name : key,
@@ -79,16 +79,18 @@ export function tallyCardVotes(card: Card): CardVoteTally {
   }))
   let up = 0
   let down = 0
+  let love = 0
   for (const entry of entries) {
     if (entry.value === 1) up += 1
-    else down += 1
+    else if (entry.value === -1) down += 1
+    else love += 1
   }
   return {
     cardId: card.id,
     content: card.content,
     up,
     down,
-    score: up - down,
+    score: up + love * 2 - down,
     votes: entries,
   }
 }

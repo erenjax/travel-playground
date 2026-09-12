@@ -40,7 +40,7 @@ export function HomeScreen() {
   return (
     <div className="gate">
       <div className="gate-card home-card">
-        <h1>Where to next?</h1>
+        <h1>Planning is half the fun.</h1>
         <p className="home-lead">Create a trip board, or join one with a code.</p>
 
         <div className="home-modes" role="tablist" aria-label="Start a trip">

@@ -5,7 +5,7 @@ import type { Point } from './useCamera'
  * Width is fixed (`.card` in App.css). Height hugs content, so callers that need a
  * real box pass a measured size; these defaults cover the first frame before that.
  */
-export const CARD_WIDTH = 200
+export const CARD_WIDTH = 196
 export const CARD_HEIGHT = 164
 
 export type CardSize = { readonly width: number; readonly height: number }
