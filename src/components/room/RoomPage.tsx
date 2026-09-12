@@ -1,4 +1,4 @@
-import { LiveMap } from '@liveblocks/client'
+import { LiveList, LiveMap } from '@liveblocks/client'
 import { ClientSideSuspense, RoomProvider } from '@liveblocks/react/suspense'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import { Main } from '../../Main'
@@ -51,6 +51,7 @@ export function RoomPage({ displayName }: RoomPageProps) {
         destination: seed?.destination ?? { label: '' },
         startDate: seed?.startDate ?? '',
         endDate: seed?.endDate ?? '',
+        messages: new LiveList([]),
       }}
     >
       <ClientSideSuspense fallback={<div className="status">Opening {code}…</div>}>
