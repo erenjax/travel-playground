@@ -403,14 +403,16 @@ export function Canvas() {
         />
       ) : null}
 
-      <ZoomControls
-        zoom={camera.zoom}
-        canZoomIn={canZoomIn}
-        canZoomOut={canZoomOut}
-        onZoomIn={() => zoomIn(viewportCenter(viewportRef.current))}
-        onZoomOut={() => zoomOut(viewportCenter(viewportRef.current))}
-        onReset={resetCamera}
-      />
+      <div className="canvas-controls">
+        <ZoomControls
+          zoom={camera.zoom}
+          canZoomIn={canZoomIn}
+          canZoomOut={canZoomOut}
+          onZoomIn={() => zoomIn(viewportCenter(viewportRef.current))}
+          onZoomOut={() => zoomOut(viewportCenter(viewportRef.current))}
+          onReset={resetCamera}
+        />
+      </div>
     </div>
   )
 }

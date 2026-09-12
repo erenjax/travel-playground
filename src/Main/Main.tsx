@@ -1,18 +1,15 @@
+import { useState, type CSSProperties } from 'react'
 import { Canvas } from './Canvas/Canvas'
-import { ProfileBadge } from './Bars/ProfileBadge'
 import { SideTab } from './Bars/SideTab'
 
-type MainProps = {
-  onChangeName: () => void
-}
+export function Main() {
+  const [sidebarWidth, setSidebarWidth] = useState(260)
 
-export function Main({ onChangeName }: MainProps) {
   return (
     <div className="app">
-      <div className="app-body">
+      <div className="app-body" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
         <Canvas />
-        <ProfileBadge onChangeName={onChangeName} />
-        <SideTab />
+        <SideTab width={sidebarWidth} onResize={setSidebarWidth} />
       </div>
     </div>
   )
