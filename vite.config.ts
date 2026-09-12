@@ -8,7 +8,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [
-      suggestionsPlugin(env.GROK_API_KEY || env.XAI_API_KEY || env.VITE_GROK_API_KEY, env.GROK_MODEL || 'grok-4.6'),
+      suggestionsPlugin(
+        env.GROK_API_KEY || env.XAI_API_KEY || env.VITE_GROK_API_KEY,
+        env.GROK_MODEL || 'grok-4.6',
+        env.GROK_ITINERARY_MODEL || env.GROK_MODEL || 'grok-4.6',
+      ),
       react(),
       babel({ presets: [reactCompilerPreset()] }),
     ],

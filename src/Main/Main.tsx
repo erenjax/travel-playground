@@ -27,6 +27,8 @@ export function Main() {
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [itineraryBusy, setItineraryBusy] = useState(false)
   const [itineraryError, setItineraryError] = useState('')
+  const [editingTripTitle, setEditingTripTitle] = useState(false)
+  const [tripTitleDraft, setTripTitleDraft] = useState('')
   const destination = useStorage((root) => root.destination)
   const publishedItinerary = useStorage((root) => root.itinerary)
   const itineraryStatus = useStorage((root) => root.itineraryStatus)
@@ -39,6 +41,9 @@ export function Main() {
   }, [])
   const setItineraryStatus = useMutation(({ storage }, status: string) => {
     storage.set('itineraryStatus', status)
+  }, [])
+  const setTripTitle = useMutation(({ storage }, value: string) => {
+    storage.set('tripTitle', value)
   }, [])
   const myUser = useSelf((me) => me.presence.user, shallow)
   const others = useOthers()
@@ -60,12 +65,22 @@ export function Main() {
       setItineraryError('The shared itinerary could not be loaded.')
     }
   }, [publishedItinerary])
+  useEffect(() => {
+    if (!editingTripTitle) setTripTitleDraft(tripTitle || 'Untitled trip')
+  }, [tripTitle, editingTripTitle])
+
+  function commitTripTitle() {
+    const value = tripTitleDraft.trim() || 'Untitled trip'
+    setTripTitle(value)
+    setTripTitleDraft(value)
+    setEditingTripTitle(false)
+  }
   async function createItinerary() {
     setItineraryBusy(true)
     setItineraryError('')
     setItineraryStatus('generating')
     try {
-      const response = await fetch('/api/itinerary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destination: placeLabel, startDate, endDate, cards: Object.values(cards).map((card) => ({ id: card.id, type: card.content._tag, name: contenderName(card.content), address: 'location' in card.content.data ? card.content.data.location.label : '', cuisine: card.content._tag === 'FoodCard' ? card.content.data.cuisine ?? '' : '' })), edges: Object.values(edges).filter((edge) => edge.arrow && edge.arrow !== 'none').map((edge) => ({ from: edge.from.cardId, to: edge.to.cardId, arrow: edge.arrow })) }) })
+      const response = await fetch('/api/itinerary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destination: placeLabel, startDate, endDate, refresh: Boolean(publishedItinerary), cards: Object.values(cards).map((card) => ({ id: card.id, type: card.content._tag, name: contenderName(card.content), address: 'location' in card.content.data ? card.content.data.location.label : '', cuisine: card.content._tag === 'FoodCard' ? card.content.data.cuisine ?? '' : '', votes: (card.votes ?? []).reduce((score, vote) => score + vote.value, 0) })), edges: Object.values(edges).filter((edge) => edge.arrow && edge.arrow !== 'none').map((edge) => ({ from: edge.from.cardId, to: edge.to.cardId, arrow: edge.arrow })) }) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Could not create itinerary.')
       setItinerary(data)
@@ -128,10 +143,34 @@ export function Main() {
     <div className="app">
       <header className="canvas-top-bar">
         <Link to="/" className="canvas-home-link">
-          All trips
+          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21.5 10.8 13 8V3.5a1.5 1.5 0 0 0-3 0V8l-8.5 2.8a1.2 1.2 0 1 0 .8 2.3L10 11.2v5.5l-2.4 1.4a1.2 1.2 0 1 0 1.2 2.1l2.7-1.6 2.7 1.6a1.2 1.2 0 1 0 1.2-2.1L13 16.7v-5.5l7.7 1.9a1.2 1.2 0 1 0 .8-2.3Z" fill="currentColor" />
+          </svg>
+          <span className="sr-only">All trips</span>
         </Link>
         <div className="canvas-trip-heading">
-          <strong className="canvas-trip-title">{tripTitle || 'Untitled trip'}</strong>
+          {editingTripTitle ? (
+            <input
+              className="canvas-trip-title-input"
+              value={tripTitleDraft}
+              onChange={(event) => setTripTitleDraft(event.target.value)}
+              onBlur={commitTripTitle}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitTripTitle()
+                if (event.key === 'Escape') {
+                  setTripTitleDraft(tripTitle || 'Untitled trip')
+                  setEditingTripTitle(false)
+                }
+              }}
+              autoFocus
+              size={Math.max(tripTitleDraft.length, 1)}
+              aria-label="Trip title"
+            />
+          ) : (
+            <strong className="canvas-trip-title" onDoubleClick={() => setEditingTripTitle(true)} title="Double-click to rename">
+              {tripTitle || 'Untitled trip'}
+            </strong>
+          )}
           {(placeLabel || dateLabel) && (
             <span className="canvas-trip-meta">
               {placeLabel && <span>{placeLabel}</span>}
@@ -160,7 +199,7 @@ export function Main() {
             </svg>
             {copied ? 'Shared' : 'Share'}
           </button>
-          <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || itineraryStatus === 'generating' || Boolean(publishedItinerary) || Object.keys(cards).length === 0}>
+          <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || itineraryStatus === 'generating' || Object.keys(cards).length === 0}>
             {itineraryBusy ? 'Creating…' : 'Create itinerary'}
           </button>
         </div>}
