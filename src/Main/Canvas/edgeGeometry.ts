@@ -1,9 +1,12 @@
 import type { AnchorSide, ArrowMode, Card, Edge, EdgeEndpoint } from '../../liveblocks/types'
 import type { Point } from './useCamera'
 
-/** Cards are a fixed size; these must stay in sync with `.card` in App.css. */
-export const CARD_WIDTH = 160
-export const CARD_HEIGHT = 56
+/**
+ * Cards are a fixed size whatever they hold, which is what lets anchors and connectors be
+ * computed from position alone. These must stay in sync with `.card` in App.css.
+ */
+export const CARD_WIDTH = 200
+export const CARD_HEIGHT = 164
 
 export const ANCHOR_SIDES: readonly AnchorSide[] = ['top', 'right', 'bottom', 'left']
 

@@ -53,6 +53,7 @@ export default function App() {
           cursor: null,
           selectedCardId: null,
           selectedEdgeId: null,
+          editingCardId: null,
           user: { name: displayName, color: getUserColor(displayName) },
         }}
         initialStorage={{

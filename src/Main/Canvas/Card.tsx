@@ -1,5 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react'
 import type { AnchorSide, CanvasUser, Card as CardData } from '../../liveblocks/types'
+import { CardBody } from './CardBody'
 import { ANCHOR_SIDES } from './edgeGeometry'
 
 type DragStart = {
@@ -19,9 +20,15 @@ type CardProps = {
   showAnchors: boolean
   selectedByMe: boolean
   selectedByOthers: CanvasUser[]
+  editing: boolean
+  /** Set while someone else holds the card's text, which makes it read-only here. */
+  editedByOther?: CanvasUser
   onSelect: (id: string) => void
   onMove: (id: string, x: number, y: number) => void
   onStartConnect: (cardId: string, side: AnchorSide, event: PointerEvent<HTMLElement>) => void
+  onStartEdit: (id: string) => void
+  onEndEdit: () => void
+  onChangeText: (id: string, text: string) => void
 }
 
 export function Card({
@@ -32,9 +39,14 @@ export function Card({
   showAnchors,
   selectedByMe,
   selectedByOthers,
+  editing,
+  editedByOther,
   onSelect,
   onMove,
   onStartConnect,
+  onStartEdit,
+  onEndEdit,
+  onChangeText,
 }: CardProps) {
   const dragStart = useRef<DragStart | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -72,6 +84,11 @@ export function Card({
     }
   }
 
+  function handleDoubleClick() {
+    if (card.content._tag !== 'BlankCard' || editedByOther) return
+    onStartEdit(card.id)
+  }
+
   function handleAnchorPointerDown(side: AnchorSide, event: PointerEvent<HTMLElement>) {
     if (event.button !== 0 || panMode) return
     // Keeps the card's own drag handler from claiming the pointer, and keeps focus off
@@ -82,10 +99,18 @@ export function Card({
   }
 
   const otherSelector = selectedByOthers[0]
-  const ringColor = selectedByMe ? myColor : otherSelector?.color
-  const className = ['card', dragging ? 'card-dragging' : '', showAnchors ? 'card-anchored' : '']
+  const ringColor = selectedByMe ? myColor : (editedByOther?.color ?? otherSelector?.color)
+  const className = [
+    'card',
+    `card-${card.content._tag}`,
+    dragging ? 'card-dragging' : '',
+    showAnchors ? 'card-anchored' : '',
+    editing ? 'card-editing' : '',
+  ]
     .filter(Boolean)
     .join(' ')
+
+  const editingText = editing && card.content._tag === 'BlankCard' ? card.content.data.text : null
 
   return (
     <div
@@ -100,9 +125,33 @@ export function Card({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onDoubleClick={handleDoubleClick}
     >
-      {card.text}
-      {otherSelector ? (
+      {editingText === null ? (
+        <CardBody content={card.content} />
+      ) : (
+        <textarea
+          className="card-editor"
+          value={editingText}
+          autoFocus
+          placeholder="Type something"
+          // Every keystroke goes to storage so others watch it land live; only one person
+          // can be in here at a time, so there is nothing to merge.
+          onChange={(event) => onChangeText(card.id, event.target.value)}
+          onBlur={onEndEdit}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') event.currentTarget.blur()
+          }}
+          // Clicking to place the caret must not become a card drag.
+          onPointerDown={(event) => event.stopPropagation()}
+        />
+      )}
+
+      {editedByOther ? (
+        <span className="card-selector" style={{ backgroundColor: editedByOther.color }}>
+          {editedByOther.name} is editing
+        </span>
+      ) : otherSelector ? (
         <span className="card-selector" style={{ backgroundColor: otherSelector.color }}>
           {selectedByOthers.map((user) => user.name).join(', ')}
         </span>
