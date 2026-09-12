@@ -1,5 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react'
-import type { AnchorSide, CanvasUser, Card as CardData } from '../../liveblocks/types'
+import { scoreOf, voteOf } from '../../lib/cardVotes'
+import type { AnchorSide, CanvasUser, Card as CardData, VoteValue } from '../../liveblocks/types'
 import { CardBody } from './CardBody'
 import { ANCHOR_SIDES } from './edgeGeometry'
 
@@ -12,6 +13,7 @@ type DragStart = {
 
 type CardProps = {
   card: CardData
+  voterId: string
   myColor: string
   zoom: number
   /** While the canvas is being panned, drags belong to the canvas rather than the card. */
@@ -29,10 +31,12 @@ type CardProps = {
   onStartEdit: (id: string) => void
   onEndEdit: () => void
   onChangeText: (id: string, text: string) => void
+  onVote: (id: string, value: VoteValue) => void
 }
 
 export function Card({
   card,
+  voterId,
   myColor,
   zoom,
   panMode,
@@ -47,6 +51,7 @@ export function Card({
   onStartEdit,
   onEndEdit,
   onChangeText,
+  onVote,
 }: CardProps) {
   const dragStart = useRef<DragStart | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -127,6 +132,13 @@ export function Card({
       onPointerCancel={handlePointerUp}
       onDoubleClick={handleDoubleClick}
     >
+      <CardVoteRail
+        score={scoreOf(card.votes)}
+        myValue={voteOf(card.votes, voterId)}
+        myColor={myColor}
+        onVote={(value) => onVote(card.id, value)}
+      />
+
       {editingText === null ? (
         <CardBody content={card.content} />
       ) : (
@@ -169,5 +181,72 @@ export function Card({
         />
       ))}
     </div>
+  )
+}
+
+function CardVoteRail({
+  score,
+  myValue,
+  myColor,
+  onVote,
+}: {
+  score: number
+  myValue: VoteValue | undefined
+  myColor: string
+  onVote: (value: VoteValue) => void
+}) {
+  return (
+    <div
+      className="card-votes"
+      onPointerDown={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
+      <button
+        type="button"
+        className={myValue === 1 ? 'card-vote card-vote-on' : 'card-vote'}
+        style={myValue === 1 ? { color: myColor } : undefined}
+        aria-label="Upvote"
+        aria-pressed={myValue === 1}
+        onClick={() => onVote(1)}
+      >
+        <VoteChevron direction="up" />
+      </button>
+      <span
+        className="card-vote-score"
+        style={
+          myValue === 1
+            ? { color: myColor }
+            : myValue === -1
+              ? { color: 'var(--danger)' }
+              : undefined
+        }
+      >
+        {score}
+      </span>
+      <button
+        type="button"
+        className={myValue === -1 ? 'card-vote card-vote-on card-vote-down' : 'card-vote'}
+        aria-label="Downvote"
+        aria-pressed={myValue === -1}
+        onClick={() => onVote(-1)}
+      >
+        <VoteChevron direction="down" />
+      </button>
+    </div>
+  )
+}
+
+function VoteChevron({ direction }: { direction: 'up' | 'down' }) {
+  return (
+    <svg viewBox="0 0 10 7" width="10" height="7" aria-hidden="true">
+      <path
+        d={direction === 'up' ? 'M1 6 L5 1.5 L9 6' : 'M1 1 L5 5.5 L9 1'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }

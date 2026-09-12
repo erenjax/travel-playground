@@ -7,14 +7,18 @@ import {
   useUpdateMyPresence,
 } from '@liveblocks/react/suspense'
 import {
+  Component,
   useEffect,
   useMemo,
   useRef,
   useState,
   type DragEvent,
   type PointerEvent,
+  type ReactNode,
 } from 'react'
-import type { AnchorSide, CanvasCategory, CanvasUser, CardKind, Edge, EdgeEndpoint } from '../../liveblocks/types'
+import type { AnchorSide, CanvasCategory, CanvasUser, CardKind, Edge, EdgeEndpoint, VoteValue } from '../../liveblocks/types'
+import { toggleCardVote } from '../../lib/cardVotes'
+import { getVoterId } from '../../lib/voterId'
 import { defaultContentFor, parseCardKind } from '../cardContent'
 import { CATEGORY_KIND } from '../categories'
 import { CARD_MIME } from '../cardMime'
@@ -80,11 +84,12 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     ({ presence }) => (presence.activeCategory ?? 'Hotels') === category,
   ), [allOthers, category])
   const updateMyPresence = useUpdateMyPresence()
-  const myUser = useSelf((me) => me.presence.user, shallow)
+  const myUser = useSelf((me) => me.presence.user, shallow) as CanvasUser
   const myConnectionId = useSelf((me) => me.connectionId)
   const mySelectedCardId = useSelf((me) => me.presence.selectedCardId)
   const mySelectedEdgeId = useSelf((me) => me.presence.selectedEdgeId)
   const myEditingCardId = useSelf((me) => me.presence.editingCardId)
+  const voterId = useMemo(() => getVoterId(), [])
 
   const addCardAt = useMutation(({ storage }, kind: CardKind, x: number, y: number) => {
     const cards = storage.get('cards')
@@ -113,6 +118,19 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     if (!card) return
     cards.set(id, { ...card, position: { x, y } })
   }, [])
+
+  const setCardVote = useMutation(
+    ({ storage }, id: string, voterId: string, name: string, value: VoteValue) => {
+      const cards = storage.get('cards')
+      const card = cards.get(id)
+      if (!card) return
+      const votes = toggleCardVote(card.votes, voterId, name, value)
+      cards.set(id, votes
+        ? { ...card, votes }
+        : { id: card.id, position: card.position, content: card.content })
+    },
+    [],
+  )
 
   const addEdge = useMutation(({ storage }, from: EdgeEndpoint, to: EdgeEndpoint) => {
     const id = crypto.randomUUID()
@@ -424,26 +442,29 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
         />
 
         {Object.values(cards).map((card) => (
-          <Card
-            key={card.id}
-            card={card}
-            myColor={myUser.color}
-            zoom={camera.zoom}
-            panMode={panMode}
-            showAnchors={draft !== null}
-            selectedByMe={mySelectedCardId === card.id}
-            selectedByOthers={others
-              .filter(({ presence }) => presence.selectedCardId === card.id)
-              .map(({ presence }) => presence.user)}
-            editing={myEditingCardId === card.id}
-            editedByOther={editors[card.id]?.user}
-            onSelect={(id) => updateMyPresence({ selectedCardId: id, selectedEdgeId: null })}
-            onMove={moveCard}
-            onStartConnect={startConnect}
-            onStartEdit={startEdit}
-            onEndEdit={stopEdit}
-            onChangeText={updateCardText}
-          />
+          <CardErrorBoundary key={card.id}>
+            <Card
+              card={card}
+              voterId={voterId}
+              myColor={myUser.color}
+              zoom={camera.zoom}
+              panMode={panMode}
+              showAnchors={draft !== null}
+              selectedByMe={mySelectedCardId === card.id}
+              selectedByOthers={others
+                .filter(({ presence }) => presence.selectedCardId === card.id)
+                .map(({ presence }) => presence.user)}
+              editing={myEditingCardId === card.id}
+              editedByOther={editors[card.id]?.user}
+              onSelect={(id) => updateMyPresence({ selectedCardId: id, selectedEdgeId: null })}
+              onMove={moveCard}
+              onStartConnect={startConnect}
+              onStartEdit={startEdit}
+              onEndEdit={stopEdit}
+              onChangeText={updateCardText}
+              onVote={(id, value) => setCardVote(id, getVoterId(), myUser.name, value)}
+            />
+          </CardErrorBoundary>
         ))}
 
         {others.map(({ connectionId, presence }) =>
@@ -491,5 +512,17 @@ function viewportCenter(viewport: HTMLDivElement | null) {
   return {
     x: (viewport?.clientWidth ?? 960) / 2,
     y: (viewport?.clientHeight ?? 600) / 2,
+  }
+}
+
+class CardErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children
   }
 }

@@ -133,6 +133,15 @@ export type CardContent =
 
 export type CardKind = CardContent['_tag']
 
+/** `1` is an upvote, `-1` a downvote. A person with no entry has not voted. */
+export type VoteValue = 1 | -1
+
+export type CardVote = {
+  readonly voterId: string
+  readonly name: string
+  readonly value: VoteValue
+}
+
 /**
  * The canvas envelope: where a card sits, plus what it holds. Keeping content nested
  * means everything that only moves cards around stays indifferent to card types.
@@ -143,6 +152,11 @@ export type Card = {
   readonly id: string
   readonly position: { readonly x: number; readonly y: number }
   readonly content: CardContent
+  /**
+   * One entry per voter. An array rather than a map because Liveblocks' JSON type
+   * rejects string-keyed records. Treat it as keyed by `voterId`.
+   */
+  readonly votes?: CardVote[]
 }
 
 /** The edge of a card a connector attaches to. */

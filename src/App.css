@@ -307,7 +307,7 @@
   gap: 8px;
   width: 200px;
   height: 164px;
-  padding: 10px 12px;
+  padding: 10px 28px 10px 12px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -405,6 +405,56 @@
   line-height: 16px;
   color: #fff;
   white-space: nowrap;
+}
+
+.card-votes {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 22px;
+}
+
+.card-vote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.card-vote:hover {
+  color: var(--text-h);
+}
+
+.card-vote-on {
+  color: inherit;
+}
+
+.card-vote-down.card-vote-on {
+  color: var(--danger);
+}
+
+.card-vote:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
+.card-vote-score {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 14px;
+  color: var(--text-h);
 }
 
 /* Connector anchors */
