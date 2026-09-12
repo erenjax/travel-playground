@@ -16,10 +16,11 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react'
-import type { AnchorSide, CanvasCategory, CanvasUser, CardKind, Edge, EdgeEndpoint, VoteValue } from '../../liveblocks/types'
+import type { AnchorSide, CanvasCategory, CanvasUser, CardContent, Edge, EdgeEndpoint, VoteValue } from '../../liveblocks/types'
 import { toggleCardVote } from '../../lib/cardVotes'
 import { getVoterId } from '../../lib/voterId'
 import { defaultContentFor, parseCardKind } from '../cardContent'
+import { parseSuggestions, suggestionContent, SUGGESTION_MIME } from '../suggestions'
 import { CATEGORY_KIND } from '../categories'
 import { CARD_MIME } from '../cardMime'
 import { Card } from './Card'
@@ -91,14 +92,14 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
   const myEditingCardId = useSelf((me) => me.presence.editingCardId)
   const voterId = useMemo(() => getVoterId(), [])
 
-  const addCardAt = useMutation(({ storage }, kind: CardKind, x: number, y: number) => {
+  const addCardAt = useMutation(({ storage }, content: CardContent, x: number, y: number) => {
     const cards = storage.get('cards')
     const id = crypto.randomUUID()
 
     cards.set(id, {
       id,
       position: { x: Math.round(x), y: Math.round(y) },
-      content: defaultContentFor(kind),
+      content,
     })
 
     return id
@@ -375,7 +376,15 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
 
     const kind = parseCardKind(event.dataTransfer.getData(CARD_MIME))
     if (kind !== CATEGORY_KIND[category]) return
-    addCardAt(kind, world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
+    let content = defaultContentFor(kind)
+    const suggestionPayload = event.dataTransfer.getData(SUGGESTION_MIME)
+    if (suggestionPayload) {
+      try {
+        const [suggestion] = parseSuggestions([JSON.parse(suggestionPayload)])
+        content = suggestionContent(category, suggestion)
+      } catch { return }
+    }
+    addCardAt(content, world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
 
 
   }

@@ -47,12 +47,13 @@ export type HotelCard = {
   readonly _tag: 'HotelCard'
   readonly data: {
     readonly name: string
-    readonly imageUrl: string
+    readonly imageUrl?: string
+    readonly imageSourceUrl?: string
     readonly location: Place
     /** Total for the stay, not per night. */
-    readonly price: Money
-    readonly checkIn: string
-    readonly checkOut: string
+    readonly price?: Money
+    readonly checkIn?: string
+    readonly checkOut?: string
   }
 }
 
@@ -88,6 +89,7 @@ export type AttractionCard = {
     readonly name: string
     readonly location: Place
     readonly imageUrl?: string
+    readonly imageSourceUrl?: string
     readonly price?: Money
     readonly startsAt?: string
     readonly endsAt?: string
@@ -104,6 +106,7 @@ export type FoodCard = {
     readonly priceLevel?: 1 | 2 | 3 | 4
     readonly reservationAt?: string
     readonly imageUrl?: string
+    readonly imageSourceUrl?: string
   }
 }
 

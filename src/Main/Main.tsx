@@ -6,17 +6,20 @@ import { formatTripRange } from '../lib/tripDraft'
 import { Canvas } from './Canvas/Canvas'
 import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
+import { useSuggestions } from '../hooks/useSuggestions'
 import { CATEGORIES } from './categories'
 
 export function Main() {
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [category, setCategory] = useState<CanvasCategory>('Hotels')
   const [copied, setCopied] = useState(false)
+  const destination = useStorage((root) => root.destination)
+  const location = destination?.label ?? ''
+  const searches = useSuggestions(location)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
   const cameraControls = useCamera(category)
   const { roomId } = useParams()
-  const destination = useStorage((root) => root.destination)
   const startDate = useStorage((root) => root.startDate)
   const endDate = useStorage((root) => root.endDate)
   const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
@@ -109,7 +112,12 @@ export function Main() {
           {category === item && (
             <>
               <Canvas category={item} cameraControls={cameraControls} />
-              <SideTab category={item} width={sidebarWidth} onResize={setSidebarWidth} />
+              <SideTab
+                category={item}
+                width={sidebarWidth}
+                onResize={setSidebarWidth}
+                search={searches.forCategory(item)}
+              />
             </>
           )}
         </div>
