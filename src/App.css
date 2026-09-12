@@ -2017,7 +2017,8 @@
 .itinerary-day li span { display: block; font-size: 12px; color: var(--text); }
 .itinerary-error { position: fixed; right: 16px; bottom: 16px; z-index: 40; max-width: 360px; padding: 10px 12px; border-radius: 6px; background: var(--danger-bg); color: var(--danger); font-size: 13px; }
 .itinerary-body { overflow: auto; background: var(--canvas-bg); }
-.itinerary-canvas { display: flex; min-height: 100%; width: 100%; justify-content: center; padding: 24px; }
+/* The map sits on the scrolling content (not the scroll container) so it moves with the columns. */
+.itinerary-canvas { display: flex; min-height: 100%; min-width: 100%; width: max-content; justify-content: center; padding: 24px; background: url('./assets/world-map.svg') center 40px / 1500px auto repeat-x; }
 .itinerary-columns { display: flex; align-items: flex-start; justify-content: center; gap: 16px; min-width: max-content; }
 .itinerary-column { width: 240px; min-height: 420px; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: var(--shadow); }
 .itinerary-column > header { display: flex; flex-direction: column; gap: 2px; padding: 14px; border-bottom: 1px solid var(--border); color: var(--text-h); }

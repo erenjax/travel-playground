@@ -56,7 +56,9 @@ export function Main() {
   const selectedCardId = useSelf((me) => me.presence.selectedCardId)
   const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
   const placeLabel = destination?.label.trim() ?? ''
-  const anchor = resolvePlaceAnchor(lastSpot, destination)
+  // Memoized explicitly: the React Compiler bails out of Main (try/finally in createItinerary),
+  // and SideTab refetches suggestions whenever this reference changes.
+  const anchor = useMemo(() => resolvePlaceAnchor(lastSpot, destination), [lastSpot, destination])
   useEffect(() => {
     if (!publishedItinerary) return
     try {
