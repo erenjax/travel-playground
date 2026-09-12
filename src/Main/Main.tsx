@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
+import { shallow } from '@liveblocks/client'
+import { useOthers, useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
 import { Link, useParams } from 'react-router-dom'
 import type { CanvasCategory } from '../liveblocks/types'
 import { resolvePlaceAnchor, showAnchorOnTab, type LastSpot } from '../lib/placeAnchor'
@@ -9,6 +10,7 @@ import { Canvas } from './Canvas/Canvas'
 import { CardBody } from './Canvas/CardBody'
 import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
+import { ConnectedUsers } from './ConnectedUsers'
 import { CATEGORIES, CATEGORY_KIND } from './categories'
 import { summarizeGroupVotes } from '../lib/cardVotes'
 import type { Card as CardData } from '../liveblocks/types'
@@ -18,7 +20,7 @@ type Itinerary = { days: { date: string; title: string; activities: { cardId: st
 
 export function Main() {
   const [sidebarWidth, setSidebarWidth] = useState(300)
-  const [category, setCategory] = useState<CanvasCategory>('Hotels')
+  const [category, setCategory] = useState<ActiveTab>('Hotels')
   const [copied, setCopied] = useState(false)
   const [lastSpot, setLastSpot] = useState<LastSpot | null>(null)
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
@@ -27,9 +29,12 @@ export function Main() {
   const destination = useStorage((root) => root.destination)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
+  const myUser = useSelf((me) => me.presence.user, shallow)
+  const others = useOthers()
   const cameraControls = useCamera(category === 'Itinerary' ? 'Hotels' : category)
   const { roomId } = useParams()
   const cards = useStorage((root) => root.cards)
+  const edges = useStorage((root) => root.edges)
   const startDate = useStorage((root) => root.startDate)
   const endDate = useStorage((root) => root.endDate)
   const selectedCardId = useSelf((me) => me.presence.selectedCardId)
@@ -40,7 +45,7 @@ export function Main() {
     setItineraryBusy(true)
     setItineraryError('')
     try {
-      const response = await fetch('/api/itinerary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destination: placeLabel, startDate, endDate, cards: Object.values(cards).map((card) => ({ id: card.id, type: card.content._tag, name: contenderName(card.content), address: 'location' in card.content.data ? card.content.data.location.label : '' })) }) })
+      const response = await fetch('/api/itinerary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destination: placeLabel, startDate, endDate, cards: Object.values(cards).map((card) => ({ id: card.id, type: card.content._tag, name: contenderName(card.content), address: 'location' in card.content.data ? card.content.data.location.label : '', cuisine: card.content._tag === 'FoodCard' ? card.content.data.cuisine ?? '' : '' })), edges: Object.values(edges).filter((edge) => edge.arrow && edge.arrow !== 'none').map((edge) => ({ from: edge.from.cardId, to: edge.to.cardId, arrow: edge.arrow })) }) })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Could not create itinerary.')
       setItinerary(data)
@@ -125,19 +130,17 @@ export function Main() {
               onKeyDown={(event) => handleTabKeyDown(event, index)}
             >
               {item}
-              {showAnchorOnTab(anchor, item, category) && (
+              {category !== 'Itinerary' && showAnchorOnTab(anchor, item, category) && (
                 <span className="canvas-tab-spot">{anchor?.title}</span>
               )}
             </button>
           ))}
           {itinerary && <button type="button" role="tab" className="canvas-tab" aria-selected={category === 'Itinerary'} onClick={() => setCategory('Itinerary')}>Itinerary</button>}
         </div>
-        {roomId && (
+        {roomId && <div className="canvas-header-actions">
           <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || Object.keys(cards).length === 0}>
             {itineraryBusy ? 'Creating…' : 'Create itinerary'}
           </button>
-        )}
-        {roomId && (
           <button
             type="button"
             className="canvas-invite"
@@ -149,7 +152,11 @@ export function Main() {
           >
             {copied ? 'Copied' : 'Copy invite'}
           </button>
-        )}
+          <ConnectedUsers
+            self={myUser}
+            others={others.map(({ connectionId, presence }) => ({ connectionId, user: presence.user }))}
+          />
+        </div>}
       </header>
       {itineraryError && <div className="itinerary-error" role="alert">{itineraryError}</div>}
       {category !== 'Itinerary' && <div className="top-contenders-bar" aria-label="Top contenders">

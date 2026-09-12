@@ -1195,7 +1195,6 @@
 }
 
 .canvas-invite {
-  margin-left: auto;
   font: inherit;
   font-size: 13px;
   padding: 6px 10px;
@@ -1204,6 +1203,17 @@
   background: #fff;
   color: var(--text-h);
   cursor: pointer;
+}
+
+.canvas-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.canvas-header-actions .canvas-itinerary-button {
+  margin-left: 0;
 }
 
 .canvas-invite:hover {
@@ -1264,9 +1274,6 @@
   outline-offset: -2px;
 }
 
-<<<<<<< HEAD
-.side-tab-card a {
-=======
 .canvas-itinerary-button { margin-left: auto; padding: 7px 12px; border: 0; border-radius: 6px; background: var(--text-h); color: #fff; font: inherit; font-size: 12px; cursor: pointer; }
 .canvas-itinerary-button:disabled { opacity: .5; cursor: default; }
 .itinerary-overlay { position: fixed; inset: 0; z-index: 30; display: flex; justify-content: flex-end; background: rgba(8,6,13,.18); }
@@ -1315,7 +1322,6 @@
 
 .side-tab-card a,
 .suggestion-sources a {
->>>>>>> d90a8c9 (create itinerary)
   color: var(--accent);
   font-size: 12px;
   overflow-wrap: anywhere;
