@@ -23,7 +23,7 @@ type ChatToast = {
 }
 
 const TOAST_MS = 5000
-const TITLE = 'Travel Playground'
+const TITLE = 'TripJam'
 
 function messageIds(items: readonly ChatItem[]) {
   return items.filter((item) => item.kind === 'user').map((item) => item.id)

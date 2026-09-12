@@ -18,7 +18,7 @@ export function NameGate({ initialName = '', onSubmit }: NameGateProps) {
           if (trimmed) onSubmit(trimmed)
         }}
       >
-        <h1>Travel Playground</h1>
+        <h1>TripJam</h1>
         <label htmlFor="display-name">What&apos;s your name?</label>
         <input
           id="display-name"
