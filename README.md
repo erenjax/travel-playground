@@ -1,101 +1,96 @@
-# React + TypeScript + Vite
+# TripJam
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+TripJam is a real-time collaborative trip-planning board. Create a trip, share the
+room code with friends, and plan together on a shared canvas: search for hotels,
+attractions, and restaurants, drag them onto the board, vote on your favorites,
+sketch and leave notes, and chat — then let Grok turn the board into a day-by-day
+itinerary you can share or download as a PDF.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Live collaboration** — every board is a Liveblocks room. Cards, votes, notes,
+  drawings, stickers, cursors, and chat sync instantly between everyone in the room.
+- **Create or join a trip** — pick a destination and dates to create a room, or
+  paste a room code / invite link to join one.
+- **Place search** — the sidebar searches Google Places for Hotels, Attractions,
+  and Food near your destination (or near a spot you've pinned on the board), with
+  photos and price levels. Drag a result onto the canvas to add it as a card.
+- **Voting & top contenders** — upvote/downvote cards; the board surfaces the
+  highest-scoring options per category.
+- **Whiteboard tools** — post-it notes, freehand drawing, eraser, stickers, and
+  arrows between cards (arrows tell the itinerary generator which places belong
+  next to each other).
+- **Live chat** — in-room chat with join notices and unread counts.
+- **AI itinerary** — the Itinerary tab sends your cards, votes, and arrows to Grok,
+  which returns a structured day-by-day plan. The itinerary is published to the
+  room so everyone sees it, and can be downloaded as a PDF.
 
-## React Compiler
+## Tech stack
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+React 19 + TypeScript + Vite, [Liveblocks](https://liveblocks.io) for real-time
+storage and presence, [Google Maps Platform](https://developers.google.com/maps)
+(Places API) for place search, and [xAI Grok](https://docs.x.ai) for itinerary
+generation. `motion` handles animations and `react-router-dom` handles routing.
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
+## Getting started
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+npm install
+cp .env.example .env.local   # then fill in the keys below
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Open http://localhost:5173, enter a display name, and create a trip.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Other scripts:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Command           | What it does                              |
+| ----------------- | ----------------------------------------- |
+| `npm run build`   | Type-check and build for production       |
+| `npm run preview` | Serve the production build locally        |
+| `npm run lint`    | Run ESLint                                |
+| `npm test`        | Run the Vitest suite                      |
+
+## API keys
+
+Copy [`.env.example`](.env.example) to `.env.local` (gitignored) and fill in the
+values. Variables prefixed with `VITE_` are bundled into the browser; the others
+are only read by the Vite dev/preview server.
+
+| Variable                    | Required | Where to get it                                                                                                                                                                                                      |
+| --------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_LIVEBLOCKS_PUBLIC_KEY`| Yes      | [Liveblocks dashboard](https://liveblocks.io/dashboard) → your project → API keys. Use the **public** key (`pk_dev_…` / `pk_prod_…`). The app shows a "Missing Liveblocks key" screen without it.                     |
+| `VITE_GOOGLE_API_KEY`       | Yes      | [Google Cloud Console](https://console.cloud.google.com/google/maps-apis) → create an API key with **Maps JavaScript API** and **Places API (New)** enabled. Without it, destination search and the place sidebar are disabled. |
+| `GROK_API_KEY`              | Yes      | [xAI console](https://console.x.ai). Server-side only; powers the `/api/itinerary` endpoint. `XAI_API_KEY` and `VITE_GROK_API_KEY` are accepted as aliases for compatibility.                                        |
+| `GROK_MODEL`                | No       | Defaults to `grok-4.6`. The model must support structured JSON output (and web search, for the legacy `/api/suggestions` endpoint).                                                                                  |
+| `GROK_ITINERARY_MODEL`      | No       | Overrides `GROK_MODEL` for itinerary generation only.                                                                                                                                                               |
+
+### Notes on Google Places
+
+In development, Places REST requests go through a Vite proxy at `/api/places`
+(see [`vite.config.ts`](vite.config.ts)) so the browser key works without CORS
+issues. In production builds the client calls `https://places.googleapis.com`
+directly, so restrict the key by HTTP referrer in the Google Cloud Console.
+
+### Notes on Grok
+
+The `/api/itinerary` and `/api/suggestions` endpoints are implemented as a Vite
+plugin in [`server/suggestions.ts`](server/suggestions.ts) and run inside
+`npm run dev` and `npm run preview`. A static-only deployment (e.g. just serving
+`dist/`) has no server for these routes — you'll need to host them separately and
+keep `GROK_API_KEY` private. Itinerary responses are cached in memory for 10
+minutes; the cache resets when the server restarts.
+
+## Project layout
 
 ```
-
-## Location suggestions
-
-Set `GROK_API_KEY` in `.env.local` and run `npm run dev`. The existing
-`VITE_GROK_API_KEY` is also accepted server-side for compatibility; the UI does not
-read it. `GROK_MODEL` defaults to `grok-4.6`. The model must support
-web search together with structured JSON output.
-
-Enter a city or neighborhood in the sidebar and select **Find 3 options**.
-Switching Hotels, Attractions, or Food searches that category for the same location.
-Results are cached in the browser for the session and on the server for 30 minutes
-(up to 100 location/category searches). Identical pending searches share one Grok
-request, including when a browser reconnects. Submitting the same location reuses
-server results until they expire. The server cache resets when the server restarts.
-Grok uses low reasoning effort and a brief web lookup to reduce search overhead.
-Image search finds a photo of each specific place when available; photo URLs and
-source links are cached with the suggestions and saved when a card is dropped.
-Drag a result onto its canvas to save its name and address. Search does not assign
-booking dates, prices, or unrelated placeholder photos.
-
-`/api/suggestions` runs in the Vite development and preview servers. A static-only
-deployment needs a server hosting this endpoint and the private Grok key.
-See [xAI’s web search documentation](https://docs.x.ai/developers/tools/web-search).
+src/
+  components/home/     Create / join trip screen
+  components/room/     Room route wrapper (Liveblocks RoomProvider)
+  Main/                Board UI: canvas, cards, toolbar, sidebar, chat, itinerary + PDF export
+  lib/                 Pure helpers: votes, chat, room ids, place queries
+  liveblocks/          Client key + shared storage/presence types
+server/
+  suggestions.ts       Vite plugin exposing /api/itinerary and /api/suggestions
+  placeImages.ts       Fetches a representative image from a place's website
+```
