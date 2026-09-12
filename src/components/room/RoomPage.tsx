@@ -51,6 +51,8 @@ export function RoomPage({ displayName }: RoomPageProps) {
         destination: seed?.destination ?? { label: '' },
         startDate: seed?.startDate ?? '',
         endDate: seed?.endDate ?? '',
+        itinerary: '',
+        itineraryStatus: 'idle',
         messages: new LiveList([]),
       }}
     >
