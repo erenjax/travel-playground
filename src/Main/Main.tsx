@@ -1,6 +1,8 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { useUpdateMyPresence } from '@liveblocks/react/suspense'
+import { useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
+import { Link, useParams } from 'react-router-dom'
 import type { CanvasCategory } from '../liveblocks/types'
+import { formatTripRange } from '../lib/tripDraft'
 import { Canvas } from './Canvas/Canvas'
 import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
@@ -9,9 +11,16 @@ import { CATEGORIES } from './categories'
 export function Main() {
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [category, setCategory] = useState<CanvasCategory>('Hotels')
+  const [copied, setCopied] = useState(false)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
   const cameraControls = useCamera(category)
+  const { roomId } = useParams()
+  const destination = useStorage((root) => root.destination)
+  const startDate = useStorage((root) => root.startDate)
+  const endDate = useStorage((root) => root.endDate)
+  const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
+  const placeLabel = destination?.label.trim() ?? ''
 
   function selectCategory(next: CanvasCategory) {
     if (next === category) return
@@ -42,6 +51,16 @@ export function Main() {
   return (
     <div className="app">
       <header className="canvas-top-bar">
+        <Link to="/" className="canvas-home-link">
+          All trips
+        </Link>
+        {(placeLabel || dateLabel) && (
+          <p className="canvas-trip-meta">
+            {placeLabel && <span>{placeLabel}</span>}
+            {placeLabel && dateLabel && <span aria-hidden="true"> · </span>}
+            {dateLabel && <span>{dateLabel}</span>}
+          </p>
+        )}
         <span className="canvas-top-bar-label">Canvases</span>
         <div className="canvas-tabs" role="tablist" aria-label="Travel canvases">
           {CATEGORIES.map((item, index) => (
@@ -62,6 +81,19 @@ export function Main() {
             </button>
           ))}
         </div>
+        {roomId && (
+          <button
+            type="button"
+            className="canvas-invite"
+            onClick={() => {
+              void navigator.clipboard.writeText(`${window.location.origin}/r/${roomId}`)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1600)
+            }}
+          >
+            {copied ? 'Copied' : 'Copy invite'}
+          </button>
+        )}
       </header>
       {CATEGORIES.map((item) => (
         <div

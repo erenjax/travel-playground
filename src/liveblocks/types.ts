@@ -189,6 +189,9 @@ export type Storage = {
   cards: LiveMap<string, Card>
   edges: LiveMap<string, Edge>
   tripTitle: string
+  destination: Place
+  startDate: string
+  endDate: string
 }
 
 declare global {
