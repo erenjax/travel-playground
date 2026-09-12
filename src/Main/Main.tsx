@@ -9,6 +9,7 @@ import { formatTripRange } from '../lib/tripDraft'
 import { Canvas } from './Canvas/Canvas'
 import { CardBody } from './Canvas/CardBody'
 import { useCamera } from './Canvas/useCamera'
+import { LiveChat } from './Bars/LiveChat'
 import { SideTab } from './Bars/SideTab'
 import { ConnectedUsers } from './ConnectedUsers'
 import { CATEGORIES, CATEGORY_KIND } from './categories'
@@ -203,6 +204,7 @@ export function Main() {
         </div>
       ))}
       {itinerary && <div className="app-body itinerary-body" hidden={category !== 'Itinerary'}><ItineraryCanvas itinerary={itinerary} cards={cards} /></div>}
+      <LiveChat />
     </div>
   )
 }

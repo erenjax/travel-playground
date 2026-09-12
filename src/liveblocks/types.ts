@@ -1,4 +1,4 @@
-import type { LiveMap } from '@liveblocks/client'
+import type { LiveList, LiveMap } from '@liveblocks/client'
 
 export type CanvasUser = {
   name: string
@@ -188,6 +188,17 @@ export type Edge = {
   readonly arrow?: ArrowMode
 }
 
+export type ChatKind = 'user' | 'join'
+
+export type ChatItem = {
+  id: string
+  kind: ChatKind
+  name: string
+  color: string
+  text: string
+  at: number
+}
+
 export type Storage = {
   cards: LiveMap<string, Card>
   edges: LiveMap<string, Edge>
@@ -195,11 +206,13 @@ export type Storage = {
   destination: Place
   startDate: string
   endDate: string
+  messages: LiveList<ChatItem>
 }
 
 declare global {
   interface Liveblocks {
     Presence: Presence
     Storage: Storage
+    RoomEvent: { type: 'join'; name: string }
   }
 }
