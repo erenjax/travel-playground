@@ -13,6 +13,7 @@
   "dependencies": {
     "@liveblocks/client": "^3.24.1",
     "@liveblocks/react": "^3.24.1",
+    "motion": "^13.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3"

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { useMutation, useUpdateMyPresence } from '@liveblocks/react/suspense'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { PlaceAnchor } from '../../lib/placeAnchor'
 import {
   fetchSuggestedPlaces,
@@ -15,6 +16,7 @@ import { CATEGORY_KIND } from '../categories'
 const MIN_WIDTH = 260
 const MAX_WIDTH = 600
 const SEARCH_DELAY_MS = 220
+const PLACE_STAGGER_S = 0.07
 
 const SEARCH_PROMPT: Record<CanvasCategory, string> = {
   Hotels: 'Search hotels',
@@ -30,37 +32,55 @@ function fillFromResult(result: PlaceResult): PlaceFill {
   }
 }
 
+function samePlaces(a: PlaceResult[], b: PlaceResult[]): boolean {
+  return a.length === b.length && a.every((result, i) => result.placeId === b[i].placeId)
+}
+
+function anchorKey(anchor: PlaceAnchor): string {
+  return `${anchor.source}:${anchor.title}:${anchor.place.lat ?? ''},${anchor.place.lng ?? ''}`
+}
+
 function PlaceChip({
   result,
   kind,
+  index,
   onAdd,
 }: {
   result: PlaceResult
   kind: CardKind
+  index: number
   onAdd: () => void
 }) {
+  const reduceMotion = useReducedMotion()
+  // The wrapper animates; the button stays native so HTML5 drag-and-drop keeps its dataTransfer.
   return (
-    <button
-      type="button"
-      className="side-tab-place"
-      draggable
-      onDragStart={(event) => {
-        event.dataTransfer.setData(CARD_MIME, serializeCardDrag(kind, fillFromResult(result)))
-        event.dataTransfer.setData('text/plain', result.name)
-        event.dataTransfer.effectAllowed = 'copy'
-      }}
-      onClick={onAdd}
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.26, ease: 'easeOut', delay: index * PLACE_STAGGER_S }}
     >
-      {result.imageUrl ? (
-        <img className="side-tab-place-photo" src={result.imageUrl} alt="" draggable={false} />
-      ) : (
-        <span className="side-tab-place-photo side-tab-place-photo-empty" aria-hidden="true" />
-      )}
-      <span className="side-tab-place-copy">
-        <span className="side-tab-card-title">{result.name}</span>
-        <span className="side-tab-card-hint">{result.address ?? result.place.label}</span>
-      </span>
-    </button>
+      <button
+        type="button"
+        className="side-tab-place"
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.setData(CARD_MIME, serializeCardDrag(kind, fillFromResult(result)))
+          event.dataTransfer.setData('text/plain', result.name)
+          event.dataTransfer.effectAllowed = 'copy'
+        }}
+        onClick={onAdd}
+      >
+        {result.imageUrl ? (
+          <img className="side-tab-place-photo" src={result.imageUrl} alt="" draggable={false} />
+        ) : (
+          <span className="side-tab-place-photo side-tab-place-photo-empty" aria-hidden="true" />
+        )}
+        <span className="side-tab-place-copy">
+          <span className="side-tab-card-title">{result.name}</span>
+          <span className="side-tab-card-hint">{result.address ?? result.place.label}</span>
+        </span>
+      </button>
+    </motion.div>
   )
 }
 
@@ -76,12 +96,18 @@ export function SideTab({ category, width, onResize, anchor, onClearSpot }: Side
   const resizeStart = useRef<{ pointerId: number; x: number; width: number } | null>(null)
   const [resizing, setResizing] = useState(false)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<PlaceResult[]>([])
+  // `version` bumps only when the set of places changes, so the list re-mounts and the chips cascade in again.
+  const [placeList, setPlaceList] = useState<{ results: PlaceResult[]; version: number }>({
+    results: [],
+    version: 0,
+  })
+  const { results, version: resultsVersion } = placeList
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState(() =>
     hasGoogleMapsKey() ? '' : 'Add VITE_GOOGLE_API_KEY to search places',
   )
   const updateMyPresence = useUpdateMyPresence()
+  const reduceMotion = useReducedMotion()
   const kind = CATEGORY_KIND[category]
   const fromOtherCanvas = Boolean(
     anchor?.source === 'selection' && anchor.sourceCategory && anchor.sourceCategory !== category,
@@ -116,11 +142,13 @@ export function SideTab({ category, width, onResize, anchor, onClearSpot }: Side
       try {
         const next = await fetchSuggestedPlaces(query, category, anchor)
         if (cancelled) return
-        setResults(next)
+        setPlaceList((prev) =>
+          samePlaces(prev.results, next) ? prev : { results: next, version: prev.version + 1 },
+        )
         setSearchError(next.length === 0 && query.trim() ? 'No places match that search' : '')
       } catch {
         if (!cancelled) {
-          setResults([])
+          setPlaceList((prev) => (prev.results.length ? { results: [], version: prev.version + 1 } : prev))
           setSearchError('Place search is unavailable')
         }
       } finally {
@@ -189,25 +217,33 @@ export function SideTab({ category, width, onResize, anchor, onClearSpot }: Side
         }}
       />
       <div className="side-tab-header">
-        <span>{category}</span>
+        <span className="side-tab-header-title">{category}</span>
+        <AnimatePresence mode="wait" initial={false}>
+          {anchor && (
+            <motion.div
+              key={anchorKey(anchor)}
+              className={fromOtherCanvas ? 'side-tab-near side-tab-near-away' : 'side-tab-near'}
+              initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: 4, transition: { duration: 0.14 } }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+            >
+              <span className="side-tab-near-label" title={`Near ${anchor.title}`}>
+                Near {anchor.title}
+                {fromOtherCanvas && (
+                  <span className="side-tab-near-from"> · {anchor.sourceCategory}</span>
+                )}
+              </span>
+              {anchor.source === 'selection' && (
+                <button type="button" className="side-tab-near-clear" onClick={onClearSpot}>
+                  Clear
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <div className="side-tab-body" aria-busy={loading}>
-        {anchor && (
-          <div className={fromOtherCanvas ? 'side-tab-anchor side-tab-anchor-away' : 'side-tab-anchor'}>
-            <div className="side-tab-anchor-copy">
-              <span className="side-tab-anchor-near">Near {anchor.title}</span>
-              {fromOtherCanvas && (
-                <span className="side-tab-anchor-from">from {anchor.sourceCategory}</span>
-              )}
-            </div>
-            {anchor.source === 'selection' && (
-              <button type="button" className="side-tab-anchor-clear" onClick={onClearSpot}>
-                Clear
-              </button>
-            )}
-          </div>
-        )}
-
         <input
           className="side-tab-search"
           type="search"
@@ -226,33 +262,44 @@ export function SideTab({ category, width, onResize, anchor, onClearSpot }: Side
           </p>
         )}
 
-        <div className="side-tab-places">
-          {results.map((result) => (
-            <PlaceChip
-              key={result.placeId}
-              result={result}
-              kind={kind}
-              onAdd={() => addCard(fillFromResult(result))}
-            />
-          ))}
-        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          {results.length > 0 && (
+            <motion.div
+              key={resultsVersion}
+              className="side-tab-places"
+              animate={{ opacity: loading ? 0.35 : 1 }}
+              exit={reduceMotion ? undefined : { opacity: 0, transition: { duration: 0.16 } }}
+              transition={{ duration: 0.2 }}
+            >
+              {results.map((result, index) => (
+                <PlaceChip
+                  key={result.placeId}
+                  result={result}
+                  kind={kind}
+                  index={index}
+                  onAdd={() => addCard(fillFromResult(result))}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <button
-          type="button"
-          className="side-tab-card"
-          draggable
-          onDragStart={(event) => {
-            event.dataTransfer.setData(CARD_MIME, serializeCardDrag(kind))
-            event.dataTransfer.setData('text/plain', CARD_KIND_LABELS[kind])
-            event.dataTransfer.effectAllowed = 'copy'
-          }}
-          onClick={() => addCard()}
-        >
-          <span className="side-tab-card-title">Empty {CARD_KIND_LABELS[kind].toLowerCase()}</span>
-          <span className="side-tab-card-hint">{CARD_KIND_HINTS[kind]}</span>
-        </button>
-        <p className="side-tab-hint">Drag onto the canvas, or click to add</p>
-      </div>
-    </aside>
-  )
-}
+          <button
+            type="button"
+            className="side-tab-card"
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData(CARD_MIME, serializeCardDrag(kind))
+              event.dataTransfer.setData('text/plain', CARD_KIND_LABELS[kind])
+              event.dataTransfer.effectAllowed = 'copy'
+            }}
+            onClick={() => addCard()}
+          >
+            <span className="side-tab-card-title">Empty {CARD_KIND_LABELS[kind].toLowerCase()}</span>
+            <span className="side-tab-card-hint">{CARD_KIND_HINTS[kind]}</span>
+          </button>
+          <p className="side-tab-hint">Drag onto the canvas, or click to add</p>
+        </div>
+      </aside>
+    )
+  }
