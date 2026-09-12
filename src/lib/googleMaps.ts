@@ -1,4 +1,10 @@
-import type { Place } from '../liveblocks/types'
+import type { CanvasCategory, Place } from '../liveblocks/types'
+import type { PlaceAnchor } from './placeAnchor'
+import { searchNearbyPlaces, searchTextPlaces } from './placesApi'
+import { excludeSameSpot, suggestionRequest, type PlaceResult } from './placeQuery'
+import { mapPriceLevel } from './placeTypes'
+
+export type { PlaceResult }
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_API_KEY?.trim() ?? ''
 
@@ -142,4 +148,106 @@ export async function fetchPlaceSuggestions(
   } catch {
     return fetchLegacySuggestions(input)
   }
+}
+
+const PLACE_FIELDS = ['id', 'displayName', 'formattedAddress', 'location', 'photos', 'priceLevel']
+
+function photoUrl(place: google.maps.places.Place): string | undefined {
+  try {
+    return place.photos?.[0]?.getURI({ maxWidth: 480, maxHeight: 280 }) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+function resultFromPlace(place: google.maps.places.Place): PlaceResult | null {
+  const name = place.displayName
+  if (!name) return null
+  return {
+    placeId: place.id ?? name,
+    name,
+    address: place.formattedAddress ?? undefined,
+    place: storedPlace(name, place.formattedAddress, place.location?.lat(), place.location?.lng()),
+    imageUrl: photoUrl(place),
+    priceLevel: mapPriceLevel(
+      typeof place.priceLevel === 'number' || typeof place.priceLevel === 'string'
+        ? place.priceLevel
+        : place.priceLevel != null ? String(place.priceLevel) : undefined,
+    ),
+  }
+}
+
+async function fetchNearbyPlaces(request: {
+  lat: number
+  lng: number
+  types: string[]
+  radius: number
+}): Promise<PlaceResult[]> {
+  const { Place } = await loadPlacesLibrary()
+  const { places } = await Place.searchNearby({
+    fields: PLACE_FIELDS,
+    locationRestriction: {
+      center: { lat: request.lat, lng: request.lng },
+      radius: request.radius,
+    },
+    includedPrimaryTypes: request.types,
+    maxResultCount: 8,
+    rankPreference: 'POPULARITY',
+  })
+  return places.flatMap((place) => {
+    const result = resultFromPlace(place)
+    return result ? [result] : []
+  })
+}
+
+async function fetchTextSearchPlaces(request: {
+  query: string
+  types: string[]
+  bias?: { lat: number; lng: number; radius: number }
+}): Promise<PlaceResult[]> {
+  const { Place } = await loadPlacesLibrary()
+  const { places } = await Place.searchByText({
+    fields: PLACE_FIELDS,
+    textQuery: request.query,
+    includedType: request.types[0],
+    maxResultCount: 8,
+    ...(request.bias
+      ? { locationBias: { center: { lat: request.bias.lat, lng: request.bias.lng }, radius: request.bias.radius } }
+      : {}),
+  })
+  return places.flatMap((place) => {
+    const result = resultFromPlace(place)
+    return result ? [result] : []
+  })
+}
+
+async function fetchSuggestedPlacesFromJs(
+  request: Exclude<ReturnType<typeof suggestionRequest>, { mode: 'none' }>,
+  anchor: PlaceAnchor | null,
+): Promise<PlaceResult[]> {
+  if (request.mode === 'nearby') {
+    return fetchNearbyPlaces(request).catch(() => fetchTextSearchPlaces({
+      query: `${request.types[0]} near ${anchor?.title ?? ''}`,
+      types: request.types,
+      bias: { lat: request.lat, lng: request.lng, radius: request.radius },
+    }))
+  }
+  return fetchTextSearchPlaces(request)
+}
+
+export async function fetchSuggestedPlaces(
+  query: string,
+  category: CanvasCategory,
+  anchor: PlaceAnchor | null,
+): Promise<PlaceResult[]> {
+  const request = suggestionRequest(query, category, anchor)
+  if (request.mode === 'none') return []
+
+  const results = await (
+    request.mode === 'nearby'
+      ? searchNearbyPlaces(GOOGLE_MAPS_KEY, request)
+      : searchTextPlaces(GOOGLE_MAPS_KEY, request)
+  ).catch(() => fetchSuggestedPlacesFromJs(request, anchor))
+
+  return excludeSameSpot(results, anchor?.place)
 }

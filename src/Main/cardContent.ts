@@ -1,4 +1,11 @@
-import type { CardContent, CardKind } from '../liveblocks/types'
+import type { CardContent, CardKind, Place } from '../liveblocks/types'
+
+export type PlaceFill = {
+  place: Place
+  imageUrl?: string
+  cuisine?: string
+  priceLevel?: 1 | 2 | 3 | 4
+}
 
 /** Drives the side tab's order, so it reads blank-first then most-used. */
 export const CARD_KINDS: readonly CardKind[] = [
@@ -40,16 +47,16 @@ function dummyImage(seed: string) {
 }
 
 /** Placeholder content for a freshly dropped card, until real editing exists. */
-export function defaultContentFor(kind: CardKind): CardContent {
+export function defaultContentFor(kind: CardKind, fill?: PlaceFill): CardContent {
   switch (kind) {
     case 'HotelCard':
       return {
         _tag: 'HotelCard',
         data: {
-          name: 'Hotel Nikko Kanazawa',
-          imageUrl: dummyImage('hotel-nikko'),
-          location: { label: 'Kanazawa, Japan' },
-          price: { amount: 780, currency: 'USD' },
+          name: fill?.place.label ?? 'Hotel Nikko Kanazawa',
+          imageUrl: fill?.imageUrl ?? dummyImage(fill ? fill.place.label : 'hotel-nikko'),
+          location: fill?.place ?? { label: 'Kanazawa, Japan' },
+          price: { amount: fill ? 0 : 780, currency: 'USD' },
           checkIn: '2026-10-02',
           checkOut: '2026-10-05',
         },
@@ -69,22 +76,22 @@ export function defaultContentFor(kind: CardKind): CardContent {
       return {
         _tag: 'AttractionCard',
         data: {
-          name: 'Kenroku-en Garden',
-          location: { label: 'Kanazawa, Japan' },
-          imageUrl: dummyImage('kenrokuen'),
-          price: { amount: 320, currency: 'JPY' },
+          name: fill?.place.label ?? 'Kenroku-en Garden',
+          location: fill?.place ?? { label: 'Kanazawa, Japan' },
+          imageUrl: fill?.imageUrl ?? dummyImage(fill ? fill.place.label : 'kenrokuen'),
+          price: fill ? undefined : { amount: 320, currency: 'JPY' },
         },
       }
     case 'FoodCard':
       return {
         _tag: 'FoodCard',
         data: {
-          name: 'Omicho Market',
-          location: { label: 'Kanazawa, Japan' },
-          cuisine: 'Seafood',
-          priceLevel: 2,
-          reservationAt: '2026-10-03T12:30',
-          imageUrl: dummyImage('omicho'),
+          name: fill?.place.label ?? 'Omicho Market',
+          location: fill?.place ?? { label: 'Kanazawa, Japan' },
+          cuisine: fill ? fill.cuisine : 'Seafood',
+          priceLevel: fill ? fill.priceLevel : 2,
+          reservationAt: fill ? undefined : '2026-10-03T12:30',
+          imageUrl: fill?.imageUrl ?? (fill ? undefined : dummyImage('omicho')),
         },
       }
     case 'PhotoCard':

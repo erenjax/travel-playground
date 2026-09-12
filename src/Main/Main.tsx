@@ -1,24 +1,23 @@
-import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
 import { Link, useParams } from 'react-router-dom'
 import type { CanvasCategory } from '../liveblocks/types'
+import { resolvePlaceAnchor, showAnchorOnTab, type LastSpot } from '../lib/placeAnchor'
+import { cardTitle, categoryOfKind, placeFromCard } from '../lib/placeFromCard'
 import { formatTripRange } from '../lib/tripDraft'
 import { Canvas } from './Canvas/Canvas'
 import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
-import { useSuggestions } from '../hooks/useSuggestions'
-import { CATEGORIES } from './categories'
-import { CATEGORY_KIND } from './categories'
+import { CATEGORIES, CATEGORY_KIND } from './categories'
 import { summarizeGroupVotes } from '../lib/cardVotes'
 import type { Card as CardData } from '../liveblocks/types'
 
 export function Main() {
-  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [sidebarWidth, setSidebarWidth] = useState(300)
   const [category, setCategory] = useState<CanvasCategory>('Hotels')
   const [copied, setCopied] = useState(false)
+  const [lastSpot, setLastSpot] = useState<LastSpot | null>(null)
   const destination = useStorage((root) => root.destination)
-  const location = destination?.label ?? ''
-  const searches = useSuggestions(location)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
   const cameraControls = useCamera(category)
@@ -26,13 +25,29 @@ export function Main() {
   const cards = useStorage((root) => root.cards)
   const startDate = useStorage((root) => root.startDate)
   const endDate = useStorage((root) => root.endDate)
+  const selectedCardId = useSelf((me) => me.presence.selectedCardId)
   const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
   const placeLabel = destination?.label.trim() ?? ''
+  const anchor = resolvePlaceAnchor(lastSpot, destination)
   const topContenders = useMemo(() => {
     const kind = CATEGORY_KIND[category]
     const categoryCards = Object.values(cards).filter((card): card is CardData => card.content._tag === kind)
     return summarizeGroupVotes(categoryCards).ranking.filter((card) => card.score > 0).slice(0, 3)
   }, [cards, category])
+
+  useEffect(() => {
+    if (!selectedCardId) return
+    const card = cards[selectedCardId]
+    if (!card) return
+    const place = placeFromCard(card.content)
+    const sourceCategory = categoryOfKind(card.content._tag)
+    if (!place || !sourceCategory) return
+    setLastSpot({
+      place,
+      category: sourceCategory,
+      title: cardTitle(card.content) ?? place.label,
+    })
+  }, [selectedCardId, cards])
 
   function selectCategory(next: CanvasCategory) {
     if (next === category) return
@@ -90,6 +105,9 @@ export function Main() {
               onKeyDown={(event) => handleTabKeyDown(event, index)}
             >
               {item}
+              {showAnchorOnTab(anchor, item, category) && (
+                <span className="canvas-tab-spot">{anchor?.title}</span>
+              )}
             </button>
           ))}
         </div>
@@ -143,7 +161,8 @@ export function Main() {
                 category={item}
                 width={sidebarWidth}
                 onResize={setSidebarWidth}
-                search={searches.forCategory(item)}
+                anchor={anchor}
+                onClearSpot={() => setLastSpot(null)}
               />
             </>
           )}
