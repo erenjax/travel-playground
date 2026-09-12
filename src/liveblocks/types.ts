@@ -123,6 +123,10 @@ export type BlankCard = {
   readonly _tag: 'BlankCard'
   readonly data: {
     readonly text: string
+    /** Post-it background. Absent on older notes, which render in the default yellow. */
+    readonly color?: string
+    /** The board tab the note lives on. Notes without one predate tabs and stay hidden. */
+    readonly category?: CanvasCategory
   }
 }
 
@@ -188,6 +192,27 @@ export type Edge = {
   readonly arrow?: ArrowMode
 }
 
+/**
+ * A freehand pen stroke. `points` is a flat `[x0, y0, x1, y1, …]` list in world space, so
+ * a long scribble stays one compact JSON value.
+ */
+export type Stroke = {
+  readonly id: string
+  readonly category: CanvasCategory
+  readonly color: string
+  readonly width: number
+  readonly points: number[]
+}
+
+/** An emoji dropped on the board. `size` is its font size in world pixels. */
+export type Sticker = {
+  readonly id: string
+  readonly category: CanvasCategory
+  readonly emoji: string
+  readonly position: { readonly x: number; readonly y: number }
+  readonly size: number
+}
+
 export type ChatKind = 'user' | 'join'
 
 export type ChatItem = {
@@ -202,6 +227,9 @@ export type ChatItem = {
 export type Storage = {
   cards: LiveMap<string, Card>
   edges: LiveMap<string, Edge>
+  /** Absent in rooms created before drawing existed; mutations create them on demand. */
+  strokes?: LiveMap<string, Stroke>
+  stickers?: LiveMap<string, Sticker>
   tripTitle: string
   destination: Place
   startDate: string

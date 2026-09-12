@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { voteList, voteOf } from '../../lib/cardVotes'
 import type { AnchorSide, CanvasUser, Card as CardData, VoteValue } from '../../liveblocks/types'
+import { DEFAULT_NOTE_COLOR } from './boardGeometry'
 import { CardBody } from './CardBody'
 import { ANCHOR_SIDES, type CardSize } from './edgeGeometry'
 
@@ -135,12 +136,14 @@ export function Card({
     .join(' ')
 
   const editingText = editing && card.content._tag === 'BlankCard' ? card.content.data.text : null
+  const noteColor = card.content._tag === 'BlankCard' ? card.content.data.color ?? DEFAULT_NOTE_COLOR : undefined
   return (
     <div
       ref={rootRef}
       className={className}
       style={{
         transform: `translate(${card.position.x}px, ${card.position.y}px)${tilt ? ` rotate(${tilt}deg)` : ''}`,
+        backgroundColor: noteColor,
         boxShadow: ringColor
           ? `0 0 0 2px ${ringColor}, 0 1px 3px rgba(0, 0, 0, 0.12)`
           : undefined,

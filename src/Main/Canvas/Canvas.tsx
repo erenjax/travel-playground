@@ -1,4 +1,4 @@
-import { shallow } from '@liveblocks/client'
+import { LiveMap, shallow } from '@liveblocks/client'
 import {
   useMutation,
   useOthers,
@@ -17,7 +17,17 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react'
-import type { AnchorSide, CanvasCategory, CanvasUser, CardContent, Edge, EdgeEndpoint, VoteValue } from '../../liveblocks/types'
+import type {
+  AnchorSide,
+  CanvasCategory,
+  CanvasUser,
+  CardContent,
+  Edge,
+  EdgeEndpoint,
+  Sticker as StickerData,
+  Stroke,
+  VoteValue,
+} from '../../liveblocks/types'
 import { toggleCardVote } from '../../lib/cardVotes'
 import { edgeIdsAttachedTo } from '../../lib/removeCard'
 import { getVoterId } from '../../lib/voterId'
@@ -25,6 +35,15 @@ import { defaultContentFor } from '../cardContent'
 import { parseCardDrag } from '../cardDrag'
 import { CATEGORY_KIND } from '../categories'
 import { CARD_MIME } from '../cardMime'
+import { BoardToolbar, type Tool } from './BoardToolbar'
+import {
+  DEFAULT_NOTE_COLOR,
+  DEFAULT_PEN_COLOR,
+  DEFAULT_PEN_WIDTH,
+  STICKER_SIZE,
+  STICKERS,
+  strokeHit,
+} from './boardGeometry'
 import { Card } from './Card'
 import { EdgeLayer, type DraftEdge } from './EdgeLayer'
 import { EdgeToolbar } from './EdgeToolbar'
@@ -43,7 +62,9 @@ import {
   type CardSizeMap,
 } from './edgeGeometry'
 import { RemoteCursor } from './RemoteCursor'
-import { screenToWorld, useCamera, worldToScreen } from './useCamera'
+import { Sticker } from './Sticker'
+import { StrokeLayer } from './StrokeLayer'
+import { screenToWorld, useCamera, worldToScreen, type Point } from './useCamera'
 import { ZoomControls } from './ZoomControls'
 
 const GRID_SIZE = 24
@@ -56,6 +77,12 @@ type PanStart = {
   pointerY: number
   moved: boolean
 }
+
+/** How close, in screen pixels, the eraser has to pass to a stroke to remove it. */
+const ERASE_REACH = 10
+
+/** Strokes and stickers are selected locally; only cards and connectors go through presence. */
+type BoardSelection = { kind: 'stroke' | 'sticker'; id: string } | null
 
 function isCardDrag(dataTransfer: DataTransfer) {
   return Array.from(dataTransfer.types).includes(CARD_MIME)
@@ -74,15 +101,37 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
   const [dropActive, setDropActive] = useState(false)
   const [draft, setDraft] = useState<DraftEdge | null>(null)
   const [cardSizes, setCardSizes] = useState<CardSizeMap>({})
+  const [tool, setTool] = useState<Tool>('select')
+  const [noteColor, setNoteColor] = useState(DEFAULT_NOTE_COLOR)
+  const [penColor, setPenColor] = useState(DEFAULT_PEN_COLOR)
+  const [penWidth, setPenWidth] = useState(DEFAULT_PEN_WIDTH)
+  const [stickerEmoji, setStickerEmoji] = useState(STICKERS[0])
+  const [draftStroke, setDraftStroke] = useState<Stroke | null>(null)
+  const [boardSelection, setBoardSelection] = useState<BoardSelection>(null)
+  /** Set while the eraser is held down, so moving over ink removes it. */
+  const erasing = useRef(false)
 
   const { camera, canZoomIn, canZoomOut, panBy, zoomBy, zoomIn, zoomOut, resetCamera } =
     cameraControls
 
   const allCards = useStorage((root) => root.cards)
   const allEdges = useStorage((root) => root.edges)
+  const allStrokes = useStorage((root) => root.strokes)
+  const allStickers = useStorage((root) => root.stickers)
+  // Notes belong to the tab they were written on, alongside that tab's place cards.
   const cards = useMemo(() => Object.fromEntries(
-    Object.entries(allCards).filter(([, card]) => card.content._tag === CATEGORY_KIND[category]),
+    Object.entries(allCards).filter(([, card]) =>
+      card.content._tag === CATEGORY_KIND[category]
+      || (card.content._tag === 'BlankCard' && card.content.data.category === category)),
   ), [allCards, category])
+  const strokes = useMemo(
+    () => Object.values(allStrokes ?? {}).filter((stroke) => stroke.category === category),
+    [allStrokes, category],
+  )
+  const stickers = useMemo(
+    () => Object.values(allStickers ?? {}).filter((sticker) => sticker.category === category),
+    [allStickers, category],
+  )
   const edges = useMemo(() => Object.fromEntries(
     Object.entries(allEdges).filter(([, edge]) => cards[edge.from.cardId] && cards[edge.to.cardId]),
   ), [allEdges, cards])
@@ -116,7 +165,7 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     const cards = storage.get('cards')
     const card = cards.get(id)
     if (!card || card.content._tag !== 'BlankCard') return
-    cards.set(id, { ...card, content: { _tag: 'BlankCard', data: { text } } })
+    cards.set(id, { ...card, content: { _tag: 'BlankCard', data: { ...card.content.data, text } } })
   }, [])
 
   const moveCard = useMutation(({ storage }, id: string, x: number, y: number) => {
@@ -183,6 +232,43 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
       edges.delete(edgeId)
     }
     cards.delete(id)
+  }, [])
+
+  // Rooms made before drawing existed have no stroke or sticker maps, so mutations create
+  // them on first use rather than assuming they are there.
+  const addStroke = useMutation(({ storage }, stroke: Stroke) => {
+    let strokes = storage.get('strokes')
+    if (!strokes) {
+      strokes = new LiveMap<string, Stroke>()
+      storage.set('strokes', strokes)
+    }
+    strokes.set(stroke.id, stroke)
+  }, [])
+
+  const removeStrokes = useMutation(({ storage }, ids: readonly string[]) => {
+    const strokes = storage.get('strokes')
+    if (!strokes) return
+    for (const id of ids) strokes.delete(id)
+  }, [])
+
+  const addSticker = useMutation(({ storage }, sticker: StickerData) => {
+    let stickers = storage.get('stickers')
+    if (!stickers) {
+      stickers = new LiveMap<string, StickerData>()
+      storage.set('stickers', stickers)
+    }
+    stickers.set(sticker.id, sticker)
+  }, [])
+
+  const moveSticker = useMutation(({ storage }, id: string, x: number, y: number) => {
+    const stickers = storage.get('stickers')
+    const sticker = stickers?.get(id)
+    if (!stickers || !sticker) return
+    stickers.set(id, { ...sticker, position: { x, y } })
+  }, [])
+
+  const removeSticker = useMutation(({ storage }, id: string) => {
+    storage.get('stickers')?.delete(id)
   }, [])
 
   const rememberCardSize = useCallback((id: string, size: CardSize) => {
@@ -298,13 +384,19 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
   useEffect(() => {
     const selectedEdgeId = mySelectedEdgeId
     const selectedCardId = mySelectedCardId
-    if (!selectedEdgeId && !selectedCardId) return
+    if (!selectedEdgeId && !selectedCardId && !boardSelection) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Delete' && event.key !== 'Backspace') return
       const target = event.target as HTMLElement | null
       if (target?.isContentEditable || target?.matches('input, textarea')) return
       event.preventDefault()
+      if (boardSelection) {
+        if (boardSelection.kind === 'stroke') removeStrokes([boardSelection.id])
+        else removeSticker(boardSelection.id)
+        setBoardSelection(null)
+        return
+      }
       if (selectedEdgeId) {
         removeEdge(selectedEdgeId)
         updateMyPresence({ selectedEdgeId: null })
@@ -317,7 +409,76 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [mySelectedEdgeId, mySelectedCardId, removeEdge, deleteCard, updateMyPresence])
+  }, [mySelectedEdgeId, mySelectedCardId, boardSelection, removeEdge, removeStrokes, removeSticker, deleteCard, updateMyPresence])
+
+  // Single-key tool switches, plus Escape back to the pointer.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.isContentEditable || target?.matches('input, textarea')) return
+      const next: Record<string, Tool> = { v: 'select', n: 'note', d: 'draw', e: 'erase', s: 'sticker', Escape: 'select' }
+      const chosen = next[event.key.length === 1 ? event.key.toLowerCase() : event.key]
+      if (!chosen) return
+      setTool(chosen)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  function chooseTool(next: Tool) {
+    setTool(next)
+    setBoardSelection(null)
+    updateMyPresence({ selectedCardId: null, selectedEdgeId: null })
+  }
+
+  function selectStroke(id: string) {
+    setBoardSelection({ kind: 'stroke', id })
+    updateMyPresence({ selectedCardId: null, selectedEdgeId: null })
+  }
+
+  function selectSticker(id: string) {
+    setBoardSelection({ kind: 'sticker', id })
+    updateMyPresence({ selectedCardId: null, selectedEdgeId: null })
+  }
+
+  function deleteSticker(id: string) {
+    removeSticker(id)
+    setBoardSelection((current) => (current?.id === id ? null : current))
+  }
+
+  function eraseAt(world: Point) {
+    const reach = ERASE_REACH / camera.zoom
+    const hit = strokes
+      .filter((stroke) => strokeHit(stroke.points, world, stroke.width / 2 + reach))
+      .map((stroke) => stroke.id)
+    if (hit.length) removeStrokes(hit)
+  }
+
+  /** Drops whatever the active tool makes at a world point; returns false for the pointer tool. */
+  function placeAt(world: Point): boolean {
+    if (tool === 'note') {
+      const id = addCardAt(
+        { _tag: 'BlankCard', data: { text: '', color: noteColor, category } },
+        world.x - CARD_WIDTH / 2,
+        world.y - 40,
+      )
+      setTool('select')
+      updateMyPresence({ editingCardId: id, selectedCardId: id, selectedEdgeId: null })
+      return true
+    }
+    if (tool === 'sticker') {
+      addSticker({
+        id: crypto.randomUUID(),
+        category,
+        emoji: stickerEmoji,
+        position: { x: Math.round(world.x - STICKER_SIZE / 2), y: Math.round(world.y - STICKER_SIZE / 2) },
+        size: STICKER_SIZE,
+      })
+      return true
+    }
+    return false
+  }
 
   function startConnect(cardId: string, side: AnchorSide, event: PointerEvent<HTMLElement>) {
     const viewport = viewportRef.current
@@ -334,6 +495,29 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     const middleClick = event.button === 1
     if (event.button !== 0 && !middleClick) return
+
+    // Space still pans in every tool; otherwise the pen and eraser claim the pointer here.
+    if (event.button === 0 && !spaceHeld) {
+      const rect = event.currentTarget.getBoundingClientRect()
+      const world = screenToWorld(camera, { x: event.clientX - rect.left, y: event.clientY - rect.top })
+      if (tool === 'draw') {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        setDraftStroke({
+          id: crypto.randomUUID(),
+          category,
+          color: penColor,
+          width: penWidth,
+          points: [Math.round(world.x), Math.round(world.y)],
+        })
+        return
+      }
+      if (tool === 'erase') {
+        event.currentTarget.setPointerCapture(event.pointerId)
+        erasing.current = true
+        eraseAt(world)
+        return
+      }
+    }
 
     panStart.current = { pointerX: event.clientX, pointerY: event.clientY, moved: false }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -359,6 +543,24 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     })
     updateMyPresence({ cursor: { x: Math.round(world.x), y: Math.round(world.y) } })
 
+    if (draftStroke) {
+      const x = Math.round(world.x)
+      const y = Math.round(world.y)
+      setDraftStroke((current) => {
+        if (!current) return null
+        const n = current.points.length
+        // Skips points that did not move, which keeps fast scribbles from ballooning.
+        if (current.points[n - 2] === x && current.points[n - 1] === y) return current
+        return { ...current, points: [...current.points, x, y] }
+      })
+      return
+    }
+
+    if (erasing.current) {
+      eraseAt(world)
+      return
+    }
+
     setDraft((current) =>
       current
         ? { ...current, cursor: world, to: findDropTarget(cards, world, current.from.cardId, cardSizes) }
@@ -370,6 +572,17 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
   function finishPointer(event: PointerEvent<HTMLDivElement>, commit: boolean) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    if (draftStroke) {
+      setDraftStroke(null)
+      if (commit) addStroke(draftStroke)
+      return
+    }
+
+    if (erasing.current) {
+      erasing.current = false
+      return
     }
 
     // A connector drag never starts a pan, so it is resolved before the pan bookkeeping.
@@ -385,6 +598,10 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     panStart.current = null
     setPanning(false)
     if (commit && !start.moved && event.button === 0) {
+      const rect = event.currentTarget.getBoundingClientRect()
+      const world = screenToWorld(camera, { x: event.clientX - rect.left, y: event.clientY - rect.top })
+      if (!spaceHeld && placeAt(world)) return
+      setBoardSelection(null)
       updateMyPresence({ selectedCardId: null, selectedEdgeId: null })
     }
   }
@@ -427,8 +644,10 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
   const panMode = spaceHeld || panning
   const viewportClass = [
     'canvas',
+    `canvas-tool-${tool}`,
     panning ? 'canvas-panning' : spaceHeld ? 'canvas-pan-ready' : '',
     dropActive ? 'canvas-drop-active' : '',
+    draftStroke ? 'canvas-drawing' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -476,6 +695,16 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
         className="canvas-world"
         style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}
       >
+        <StrokeLayer
+          strokes={strokes}
+          draft={draftStroke}
+          zoom={camera.zoom}
+          selectedId={boardSelection?.kind === 'stroke' ? boardSelection.id : null}
+          selectionColor={myUser.color}
+          selectable={tool === 'select' && !panMode}
+          onSelect={selectStroke}
+        />
+
         <EdgeLayer
           edges={Object.values(edges)}
           cards={cards}
@@ -515,6 +744,20 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
           </CardErrorBoundary>
         ))}
 
+        {stickers.map((sticker) => (
+          <Sticker
+            key={sticker.id}
+            sticker={sticker}
+            zoom={camera.zoom}
+            panMode={panMode}
+            selected={boardSelection?.kind === 'sticker' && boardSelection.id === sticker.id}
+            selectionColor={myUser.color}
+            onSelect={selectSticker}
+            onMove={moveSticker}
+            onDelete={deleteSticker}
+          />
+        ))}
+
         {others.map(({ connectionId, presence }) =>
           presence.cursor ? (
             <RemoteCursor
@@ -543,6 +786,18 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
       ) : null}
 
       <div className="canvas-controls">
+        <BoardToolbar
+          tool={tool}
+          noteColor={noteColor}
+          penColor={penColor}
+          penWidth={penWidth}
+          sticker={stickerEmoji}
+          onChangeTool={chooseTool}
+          onChangeNoteColor={setNoteColor}
+          onChangePenColor={setPenColor}
+          onChangePenWidth={setPenWidth}
+          onChangeSticker={setStickerEmoji}
+        />
         <ZoomControls
           zoom={camera.zoom}
           canZoomIn={canZoomIn}

@@ -184,6 +184,10 @@ export function CardBody({ content }: { content: CardContent }) {
     }
 
     case 'BlankCard':
-      return <div className="card-lines">{content.data.text}</div>
+      return (
+        <div className={content.data.text ? 'card-lines' : 'card-lines card-note-empty'}>
+          {content.data.text || 'Double-click to write'}
+        </div>
+      )
   }
 }

@@ -5,7 +5,7 @@ import { Main } from '../../Main'
 import { getUserColor } from '../../lib/userColor'
 import { isValidRoomId, liveblocksRoomId } from '../../lib/roomId'
 import { tripDraftError, type TripDraft } from '../../lib/tripDraft'
-import type { Card, Edge, Place } from '../../liveblocks/types'
+import type { Card, Edge, Place, Sticker, Stroke } from '../../liveblocks/types'
 
 type RoomPageProps = {
   displayName: string
@@ -47,6 +47,8 @@ export function RoomPage({ displayName }: RoomPageProps) {
       initialStorage={{
         cards: new LiveMap<string, Card>(),
         edges: new LiveMap<string, Edge>(),
+        strokes: new LiveMap<string, Stroke>(),
+        stickers: new LiveMap<string, Sticker>(),
         tripTitle: seed?.destination.label ?? 'Untitled trip',
         destination: seed?.destination ?? { label: '' },
         startDate: seed?.startDate ?? '',
