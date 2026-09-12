@@ -11,6 +11,9 @@ type DragStart = {
 type CardProps = {
   card: CardData
   myColor: string
+  zoom: number
+  /** While the canvas is being panned, drags belong to the canvas rather than the card. */
+  panMode: boolean
   selectedByMe: boolean
   selectedByOthers: CanvasUser[]
   onSelect: (id: string) => void
@@ -20,6 +23,8 @@ type CardProps = {
 export function Card({
   card,
   myColor,
+  zoom,
+  panMode,
   selectedByMe,
   selectedByOthers,
   onSelect,
@@ -29,7 +34,7 @@ export function Card({
   const [dragging, setDragging] = useState(false)
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) return
+    if (event.button !== 0 || panMode) return
     event.stopPropagation()
     onSelect(card.id)
     dragStart.current = {
@@ -47,8 +52,8 @@ export function Card({
     if (!start) return
     onMove(
       card.id,
-      Math.max(0, start.cardX + event.clientX - start.pointerX),
-      Math.max(0, start.cardY + event.clientY - start.pointerY),
+      Math.round(start.cardX + (event.clientX - start.pointerX) / zoom),
+      Math.round(start.cardY + (event.clientY - start.pointerY) / zoom),
     )
   }
 

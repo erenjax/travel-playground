@@ -162,9 +162,102 @@
   flex: 1;
   overflow: hidden;
   touch-action: none;
+  overscroll-behavior: none;
   background-color: var(--canvas-bg);
   background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
-  background-size: 24px 24px;
+}
+
+.canvas-pan-ready {
+  cursor: grab;
+}
+
+.canvas-panning {
+  cursor: grabbing;
+}
+
+/* Pans and zooms as a whole so children can stay in world coordinates. */
+.canvas-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.canvas-pan-ready .card {
+  cursor: grab;
+}
+
+.canvas-panning .card {
+  cursor: grabbing;
+}
+
+/* Zoom controls */
+
+.zoom-controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  user-select: none;
+}
+
+.zoom-button {
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.zoom-button:hover:not(:disabled) {
+  background: var(--canvas-bg);
+}
+
+.zoom-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.zoom-level {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  min-width: 44px;
+  text-align: center;
+}
+
+.zoom-reset {
+  font: inherit;
+  font-size: 13px;
+  padding: 0 8px;
+  height: 26px;
+  margin-left: 2px;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: 0 5px 5px 0;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.zoom-reset:hover {
+  color: var(--text-h);
 }
 
 /* Cards */
@@ -208,6 +301,7 @@
   position: absolute;
   top: 0;
   left: 0;
+  transform-origin: 0 0;
   pointer-events: none;
   display: flex;
   align-items: flex-start;
