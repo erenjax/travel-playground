@@ -7,15 +7,15 @@ import {
   useUpdateMyPresence,
 } from '@liveblocks/react/suspense'
 import {
-  forwardRef,
   useEffect,
-  useImperativeHandle,
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type PointerEvent,
 } from 'react'
 import type { AnchorSide, Edge, EdgeEndpoint } from '../../liveblocks/types'
+import { CARD_MIME } from '../cardMime'
 import { Card } from './Card'
 import { EdgeLayer, type DraftEdge } from './EdgeLayer'
 import { EdgeToolbar } from './EdgeToolbar'
@@ -45,15 +45,16 @@ type PanStart = {
   moved: boolean
 }
 
-export type CanvasHandle = {
-  addCard: () => void
+function isCardDrag(dataTransfer: DataTransfer) {
+  return Array.from(dataTransfer.types).includes(CARD_MIME)
 }
 
-export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
+export function Canvas() {
   const viewportRef = useRef<HTMLDivElement>(null)
   const panStart = useRef<PanStart | null>(null)
   const [panning, setPanning] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
+  const [dropActive, setDropActive] = useState(false)
   const [draft, setDraft] = useState<DraftEdge | null>(null)
 
   const { camera, canZoomIn, canZoomOut, panBy, zoomBy, zoomIn, zoomOut, resetCamera } =
@@ -67,30 +68,16 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
   const mySelectedCardId = useSelf((me) => me.presence.selectedCardId)
   const mySelectedEdgeId = useSelf((me) => me.presence.selectedEdgeId)
 
-  const addCard = useMutation(
-    ({ storage }) => {
-      const cards = storage.get('cards')
-      const viewport = viewportRef.current
-      const center = screenToWorld(camera, {
-        x: (viewport?.clientWidth ?? 960) / 2,
-        y: (viewport?.clientHeight ?? 600) / 2,
-      })
-      const offset = (cards.size % 6) * 28
-      const id = crypto.randomUUID()
+  const addCardAt = useMutation(({ storage }, x: number, y: number) => {
+    const cards = storage.get('cards')
+    const id = crypto.randomUUID()
 
-      cards.set(id, {
-        id,
-        text: 'New card',
-        position: {
-          x: Math.round(center.x - CARD_WIDTH / 2) + offset,
-          y: Math.round(center.y - CARD_HEIGHT / 2) + offset,
-        },
-      })
-    },
-    [camera],
-  )
-
-  useImperativeHandle(ref, () => ({ addCard }), [addCard])
+    cards.set(id, {
+      id,
+      text: 'New card',
+      position: { x: Math.round(x), y: Math.round(y) },
+    })
+  }, [])
 
   const moveCard = useMutation(({ storage }, id: string, x: number, y: number) => {
     const cards = storage.get('cards')
@@ -279,12 +266,45 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
     }
   }
 
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!isCardDrag(event.dataTransfer)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLDivElement>) {
+    if (!isCardDrag(event.dataTransfer)) return
+    event.preventDefault()
+    setDropActive(true)
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+    setDropActive(false)
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setDropActive(false)
+    if (!isCardDrag(event.dataTransfer)) return
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const world = screenToWorld(camera, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    })
+
+    addCardAt(world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
+  }
+
   const panMode = spaceHeld || panning
-  const viewportClass = panning
-    ? 'canvas canvas-panning'
-    : spaceHeld
-      ? 'canvas canvas-pan-ready'
-      : 'canvas'
+  const viewportClass = [
+    'canvas',
+    panning ? 'canvas-panning' : spaceHeld ? 'canvas-pan-ready' : '',
+    dropActive ? 'canvas-drop-active' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   const selectedEdge = mySelectedEdgeId ? edges[mySelectedEdgeId] : undefined
 
@@ -320,6 +340,10 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
       onPointerUp={(event) => finishPointer(event, true)}
       onPointerCancel={(event) => finishPointer(event, false)}
       onPointerLeave={() => updateMyPresence({ cursor: null })}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       <div
         className="canvas-world"
@@ -389,7 +413,7 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
       />
     </div>
   )
-})
+}
 
 function viewportCenter(viewport: HTMLDivElement | null) {
   return {
