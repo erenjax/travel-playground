@@ -18,13 +18,13 @@ export function NameGate({ initialName = '', onSubmit }: NameGateProps) {
           if (trimmed) onSubmit(trimmed)
         }}
       >
-        <h1>Multiplayer Canvas</h1>
+        <h1>Travel Playground</h1>
         <label htmlFor="display-name">What&apos;s your name?</label>
         <input
           id="display-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Aymeric"
+          placeholder="Sam"
           maxLength={32}
           autoComplete="off"
           autoFocus

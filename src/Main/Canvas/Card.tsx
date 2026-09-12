@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
-import { scoreOf, voteOf } from '../../lib/cardVotes'
+import { voteList, voteOf } from '../../lib/cardVotes'
 import type { AnchorSide, CanvasUser, Card as CardData, VoteValue } from '../../liveblocks/types'
 import { CardBody } from './CardBody'
 import { ANCHOR_SIDES, type CardSize } from './edgeGeometry'
@@ -151,9 +151,9 @@ export function Card({
       onDoubleClick={handleDoubleClick}
     >
       <CardVoteRail
-        score={scoreOf(card.votes)}
+        votes={card.votes}
+        voterId={voterId}
         myValue={voteOf(card.votes, voterId)}
-        myColor={myColor}
         onVote={(value) => onVote(card.id, value)}
       />
 
@@ -214,54 +214,58 @@ export function Card({
   )
 }
 
+const TAPBACKS: { value: VoteValue; icon: string; label: string; kind: 'love' | 'down' | 'up' }[] = [
+  { value: 2, icon: '♥', label: 'Heart', kind: 'love' },
+  { value: -1, icon: '👎', label: 'Down', kind: 'down' },
+  { value: 1, icon: '+1', label: 'Like', kind: 'up' },
+]
+
 function CardVoteRail({
-  score,
+  votes,
+  voterId,
   myValue,
-  myColor,
   onVote,
 }: {
-  score: number
+  votes: CardData['votes']
+  voterId: string
   myValue: VoteValue | undefined
-  myColor: string
   onVote: (value: VoteValue) => void
 }) {
+  const list = voteList(votes)
   return (
     <div
       className="card-votes"
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      <button
-        type="button"
-        className={myValue === 1 ? 'card-vote card-vote-on' : 'card-vote'}
-        style={myValue === 1 ? { color: myColor } : undefined}
-        aria-label="Upvote"
-        aria-pressed={myValue === 1}
-        onClick={() => onVote(1)}
-      >
-        <VoteChevron direction="up" />
-      </button>
-      <span
-        className="card-vote-score"
-        style={
-          myValue === 1
-            ? { color: myColor }
-            : myValue === -1
-              ? { color: 'var(--danger)' }
-              : undefined
-        }
-      >
-        {score}
-      </span>
-      <button
-        type="button"
-        className={myValue === -1 ? 'card-vote card-vote-on card-vote-down' : 'card-vote'}
-        aria-label="Downvote"
-        aria-pressed={myValue === -1}
-        onClick={() => onVote(-1)}
-      >
-        <VoteChevron direction="down" />
-      </button>
+      {TAPBACKS.map((item) => {
+        const who = list.filter((vote) => vote.value === item.value)
+        return (
+          <button
+            key={item.kind}
+            type="button"
+            className={`tapback tapback-${item.kind}${myValue === item.value ? ' mine' : ''}`}
+            aria-label={item.label}
+            aria-pressed={myValue === item.value}
+            onClick={() => onVote(item.value)}
+          >
+            {item.icon}
+            <span className="tapback-tip">
+              <b>{item.label}</b>
+              {who.length === 0 ? (
+                <em>No one yet</em>
+              ) : (
+                who.map((vote) => (
+                  <span key={vote.voterId}>
+                    {vote.name}
+                    {vote.voterId === voterId ? ' · you' : ''}
+                  </span>
+                ))
+              )}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -281,17 +285,3 @@ function DeleteIcon() {
   )
 }
 
-function VoteChevron({ direction }: { direction: 'up' | 'down' }) {
-  return (
-    <svg viewBox="0 0 10 7" width="10" height="7" aria-hidden="true">
-      <path
-        d={direction === 'up' ? 'M1 6 L5 1.5 L9 6' : 'M1 1 L5 5.5 L9 1'}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
