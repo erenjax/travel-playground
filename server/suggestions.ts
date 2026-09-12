@@ -3,18 +3,88 @@ import { addWebsiteImage } from './placeImages.ts'
 import { parseSuggestions, safeUrl, SUGGESTION_LIMIT } from '../src/Main/suggestions.ts'
 
 type SearchResponse = { status: number; body: unknown }
+type ItineraryActivity = { cardId: string; name: string; category: string; note: string }
+type ItineraryDay = { date: string; title: string; activities: ItineraryActivity[] }
 const CACHE_TTL_MS = 30 * 60 * 1000
 const CACHE_LIMIT = 100
+
+/** Keep the model's useful notes while guaranteeing a sensible daily rhythm. */
+function ensureDailyActivityAndMeal(value: { days?: unknown[] }, rawCards: unknown[]): { days: ItineraryDay[] } {
+  const days = (value.days ?? []).filter((day): day is ItineraryDay => {
+    if (!day || typeof day !== 'object') return false
+    const candidate = day as Partial<ItineraryDay>
+    return typeof candidate.date === 'string' && typeof candidate.title === 'string' && Array.isArray(candidate.activities)
+  }).map((day) => ({ ...day, activities: day.activities.filter((item): item is ItineraryActivity => Boolean(item && typeof item.cardId === 'string' && typeof item.name === 'string' && typeof item.category === 'string' && typeof item.note === 'string')) }))
+  if (days.length === 0) return { days: [] }
+
+  const cards = rawCards.filter((card): card is { id: string; type: string; name: string } => Boolean(card && typeof card === 'object' && typeof (card as { id?: unknown }).id === 'string' && typeof (card as { type?: unknown }).type === 'string')).map((card) => ({ id: card.id, type: card.type, name: typeof card.name === 'string' ? card.name : card.id }))
+  const cardById = new Map(cards.map((card) => [card.id, card]))
+  const generatedById = new Map<string, ItineraryActivity>()
+  for (const day of days) for (const activity of day.activities) {
+    if (cardById.has(activity.cardId) && !generatedById.has(activity.cardId)) generatedById.set(activity.cardId, activity)
+  }
+  const orderedCards = [...generatedById.keys(), ...cards.map((card) => card.id).filter((id) => !generatedById.has(id))]
+    .map((id) => cardById.get(id)).filter((card): card is { id: string; type: string; name: string } => Boolean(card))
+  const activityFor = (card: { id: string; type: string; name: string }): ItineraryActivity => generatedById.get(card.id) ?? {
+    cardId: card.id,
+    name: card.name,
+    category: card.type,
+    note: card.type === 'FoodCard' ? 'Meal' : card.type === 'AttractionCard' ? 'Activity' : 'Stay nearby',
+  }
+  const used = new Set<string>()
+  const rebuilt = days.map((day) => ({ ...day, activities: [] as ItineraryActivity[] }))
+  const takeType = (type: string, day: ItineraryDay) => {
+    const card = orderedCards.find((candidate) => candidate.type === type && !used.has(candidate.id))
+    if (!card) return
+    used.add(card.id)
+    day.activities.push(activityFor(card))
+  }
+  for (const day of rebuilt) {
+    takeType('AttractionCard', day)
+    takeType('FoodCard', day)
+  }
+  const remaining = orderedCards.filter((card) => !used.has(card.id))
+  remaining.forEach((card, index) => {
+    used.add(card.id)
+    rebuilt[index % rebuilt.length].activities.push(activityFor(card))
+  })
+  return { days: rebuilt }
+}
 
 export function suggestionsPlugin(apiKey: string, model: string): Plugin {
   const cache = new Map<string, { expiresAt: number; response: SearchResponse }>()
   const pending = new Map<string, Promise<SearchResponse>>()
   const middleware: Connect.NextHandleFunction = async (req, res, next) => {
-    if (req.url?.split('?')[0] !== '/api/suggestions') return next()
+    const path = req.url?.split('?')[0]
     const send = (status: number, body: unknown) => {
       res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
       res.end(JSON.stringify(body))
     }
+    if (path === '/api/itinerary') {
+      if (req.method !== 'POST') return send(405, { error: 'Use POST.' })
+      if (!apiKey) return send(503, { error: 'Itinerary generation is not configured. Set GROK_API_KEY.' })
+      try {
+        let raw = ''
+        for await (const chunk of req) { raw += chunk; if (raw.length > 50000) return send(413, { error: 'Itinerary request is too large.' }) }
+        const input = JSON.parse(raw) as { destination?: string; startDate?: string; endDate?: string; cards?: unknown[] }
+        if (!input.destination || !input.startDate || !input.endDate || !Array.isArray(input.cards) || input.cards.length === 0) return send(400, { error: 'Add a destination and cards before creating an itinerary.' })
+        const response = await fetch('https://api.x.ai/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(120000), body: JSON.stringify({
+          model, store: false, reasoning: { effort: 'low' }, max_output_tokens: 2500,
+          input: [
+            { role: 'system', content: 'Create a practical travel itinerary. Use every supplied card exactly once. For every day, schedule at least one AttractionCard and at least one FoodCard (when there are enough cards of those types to do so), then distribute remaining cards evenly. Group hotels, attractions, and restaurants by geographic proximity using names and addresses, avoiding unnecessary cross-city travel. Do not invent places, bookings, times, prices, or facts. Return only JSON matching the schema.' },
+            { role: 'user', content: JSON.stringify(input) },
+          ],
+          text: { format: { type: 'json_schema', name: 'travel_itinerary', strict: true, schema: { type: 'object', additionalProperties: false, properties: { days: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { date: { type: 'string' }, title: { type: 'string' }, activities: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { cardId: { type: 'string' }, name: { type: 'string' }, category: { type: 'string' }, note: { type: 'string' } }, required: ['cardId', 'name', 'category', 'note'] } } }, required: ['date', 'title', 'activities'] } } }, required: ['days'] } } },
+        }) })
+        if (!response.ok) return send(502, { error: 'Grok could not create the itinerary. Check the API key balance and try again.' })
+        const data = await response.json() as { output?: { type?: string; content?: { type?: string; text?: string }[] }[] }
+        const text = (data.output ?? []).find((item) => item.type === 'message')?.content?.find((part) => part.type === 'output_text')?.text
+        if (!text) throw new Error('Missing itinerary')
+        const itinerary = JSON.parse(text) as { days?: unknown[] }
+        return send(200, ensureDailyActivityAndMeal(itinerary, input.cards))
+      } catch (error) { return send(502, { error: error instanceof Error && error.name === 'TimeoutError' ? 'Itinerary generation took too long.' : 'Could not create the itinerary.' }) }
+    }
+    if (path !== '/api/suggestions') return next()
     if (req.method !== 'POST') return send(405, { error: 'Use POST to search.' })
     if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}` && req.headers.origin !== `https://${req.headers.host}`) {
       return send(403, { error: 'Request origin is not allowed.' })
