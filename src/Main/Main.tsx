@@ -28,6 +28,7 @@ export function Main() {
   const [itineraryBusy, setItineraryBusy] = useState(false)
   const [itineraryError, setItineraryError] = useState('')
   const destination = useStorage((root) => root.destination)
+  const tripTitle = useStorage((root) => root.tripTitle)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
   const myUser = useSelf((me) => me.presence.user, shallow)
@@ -107,14 +108,44 @@ export function Main() {
         <Link to="/" className="canvas-home-link">
           All trips
         </Link>
-        {(placeLabel || dateLabel) && (
-          <p className="canvas-trip-meta">
-            {placeLabel && <span>{placeLabel}</span>}
-            {placeLabel && dateLabel && <span aria-hidden="true"> · </span>}
-            {dateLabel && <span>{dateLabel}</span>}
-          </p>
-        )}
-        <span className="canvas-top-bar-label">Canvases</span>
+        <div className="canvas-trip-heading">
+          <strong className="canvas-trip-title">{tripTitle || 'Untitled trip'}</strong>
+          {(placeLabel || dateLabel) && (
+            <span className="canvas-trip-meta">
+              {placeLabel && <span>{placeLabel}</span>}
+              {placeLabel && dateLabel && <span aria-hidden="true"> · </span>}
+              {dateLabel && <span>{dateLabel}</span>}
+            </span>
+          )}
+        </div>
+        <ConnectedUsers
+          self={myUser}
+          others={others.map(({ connectionId, presence }) => ({ connectionId, user: presence.user }))}
+        />
+        {roomId && <div className="canvas-header-actions">
+          <button
+            type="button"
+            className="canvas-invite"
+            aria-label="Share trip invite"
+            onClick={() => {
+              void navigator.clipboard.writeText(`${window.location.origin}/r/${roomId}`)
+              setCopied(true)
+              window.setTimeout(() => setCopied(false), 1600)
+            }}
+          >
+            <svg className="canvas-share-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M5.5 10.5 10.75 5.25M7 4h4.5A1.5 1.5 0 0 1 13 5.5V10M11 12H5.5A1.5 1.5 0 0 1 4 10.5V5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            {copied ? 'Shared' : 'Share'}
+          </button>
+          <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || Object.keys(cards).length === 0}>
+            {itineraryBusy ? 'Creating…' : 'Create itinerary'}
+          </button>
+        </div>}
+      </header>
+      {itineraryError && <div className="itinerary-error" role="alert">{itineraryError}</div>}
+      <div className="top-contenders-bar" aria-label="Canvas focus and top contenders">
+        <span className="focus-label">Focus</span>
         <div className="canvas-tabs" role="tablist" aria-label="Travel canvases">
           {CATEGORIES.map((item, index) => (
             <button
@@ -138,29 +169,6 @@ export function Main() {
           ))}
           {itinerary && <button type="button" role="tab" className="canvas-tab" aria-selected={category === 'Itinerary'} onClick={() => setCategory('Itinerary')}>Itinerary</button>}
         </div>
-        {roomId && <div className="canvas-header-actions">
-          <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || Object.keys(cards).length === 0}>
-            {itineraryBusy ? 'Creating…' : 'Create itinerary'}
-          </button>
-          <button
-            type="button"
-            className="canvas-invite"
-            onClick={() => {
-              void navigator.clipboard.writeText(`${window.location.origin}/r/${roomId}`)
-              setCopied(true)
-              window.setTimeout(() => setCopied(false), 1600)
-            }}
-          >
-            {copied ? 'Copied' : 'Copy invite'}
-          </button>
-          <ConnectedUsers
-            self={myUser}
-            others={others.map(({ connectionId, presence }) => ({ connectionId, user: presence.user }))}
-          />
-        </div>}
-      </header>
-      {itineraryError && <div className="itinerary-error" role="alert">{itineraryError}</div>}
-      {category !== 'Itinerary' && <div className="top-contenders-bar" aria-label="Top contenders">
         <span className="top-contenders-label">Top contenders</span>
         <div className="top-contenders-list">
           {topContenders.map((contender, index) => (
@@ -177,7 +185,7 @@ export function Main() {
             </button>
           ))}
         </div>
-      </div>}
+      </div>
       {CATEGORIES.map((item) => (
         <div
           key={item}

@@ -34,6 +34,7 @@ type CardProps = {
   onVote: (id: string, value: VoteValue) => void
   onDelete: (id: string) => void
   onResize: (id: string, size: CardSize) => void
+  tilt?: number
 }
 
 export function Card({
@@ -56,6 +57,7 @@ export function Card({
   onVote,
   onDelete,
   onResize,
+  tilt = 0,
 }: CardProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef<DragStart | null>(null)
@@ -133,13 +135,12 @@ export function Card({
     .join(' ')
 
   const editingText = editing && card.content._tag === 'BlankCard' ? card.content.data.text : null
-
   return (
     <div
       ref={rootRef}
       className={className}
       style={{
-        transform: `translate(${card.position.x}px, ${card.position.y}px)`,
+        transform: `translate(${card.position.x}px, ${card.position.y}px)${tilt ? ` rotate(${tilt}deg)` : ''}`,
         boxShadow: ringColor
           ? `0 0 0 2px ${ringColor}, 0 1px 3px rgba(0, 0, 0, 0.12)`
           : undefined,
@@ -284,4 +285,3 @@ function DeleteIcon() {
     </svg>
   )
 }
-
