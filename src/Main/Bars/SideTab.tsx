@@ -1,20 +1,8 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useRef, useState, type PointerEvent } from 'react'
 import { CARD_KIND_HINTS, CARD_KIND_LABELS } from '../cardContent'
 import { CARD_MIME } from '../cardMime'
-import type { CardKind } from '../../liveblocks/types'
-
-const categories = ['Hotels', 'Flights', 'Attractions', 'Food'] as const
-
-/** Each category tab offers the one card kind it stands for. */
-const CATEGORY_KIND: Record<(typeof categories)[number], CardKind> = {
-  Hotels: 'HotelCard',
-  Flights: 'FlightCard',
-  Attractions: 'AttractionCard',
-  Food: 'FoodCard',
-}
-
-/** Not travel searches, so they sit below the tabs and stay reachable from any category. */
-const UTILITY_KINDS: readonly CardKind[] = ['BlankCard', 'PhotoCard']
+import type { CardKind, CanvasCategory } from '../../liveblocks/types'
+import { CATEGORY_KIND } from '../categories'
 
 const MIN_WIDTH = 260
 const MAX_WIDTH = 600
@@ -37,15 +25,14 @@ function CardChip({ kind }: { kind: CardKind }) {
 }
 
 type SideTabProps = {
+  category: CanvasCategory
   width: number
   onResize: (width: number) => void
 }
 
-export function SideTab({ width, onResize }: SideTabProps) {
+export function SideTab({ category, width, onResize }: SideTabProps) {
   const resizeStart = useRef<{ pointerId: number; x: number; width: number } | null>(null)
   const [resizing, setResizing] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<(typeof categories)[number]>('Hotels')
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   function resizeTo(nextWidth: number) {
     onResize(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, nextWidth)))
@@ -58,29 +45,6 @@ export function SideTab({ width, onResize }: SideTabProps) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-  }
-
-  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    let nextIndex: number
-    switch (event.key) {
-      case 'ArrowRight':
-        nextIndex = (index + 1) % categories.length
-        break
-      case 'ArrowLeft':
-        nextIndex = (index + categories.length - 1) % categories.length
-        break
-      case 'Home':
-        nextIndex = 0
-        break
-      case 'End':
-        nextIndex = categories.length - 1
-        break
-      default:
-        return
-    }
-    event.preventDefault()
-    setActiveCategory(categories[nextIndex])
-    tabRefs.current[nextIndex]?.focus()
   }
 
   return (
@@ -125,46 +89,11 @@ export function SideTab({ width, onResize }: SideTabProps) {
         }}
       />
       <div className="side-tab-header">
-        <span>Card categories</span>
+        <span>{category} cards</span>
       </div>
-      <div className="side-tab-categories" role="tablist" aria-label="Card categories">
-        {categories.map((category, index) => (
-          <button
-            key={category}
-            ref={(element) => { tabRefs.current[index] = element }}
-            type="button"
-            role="tab"
-            id={`category-tab-${category}`}
-            aria-controls={`category-panel-${category}`}
-            aria-selected={activeCategory === category}
-            tabIndex={activeCategory === category ? 0 : -1}
-            className="side-tab-category"
-            onClick={() => setActiveCategory(category)}
-            onKeyDown={(event) => handleTabKeyDown(event, index)}
-          >
-            {category}
-          </button>
-        ))}
-      </div>
-      {categories.map((category) => (
-        <div
-          key={category}
-          className="side-tab-body"
-          role="tabpanel"
-          id={`category-panel-${category}`}
-          aria-labelledby={`category-tab-${category}`}
-          hidden={activeCategory !== category}
-          tabIndex={0}
-        >
-          <h2 className="side-tab-panel-title">{category} category</h2>
-          <CardChip kind={CATEGORY_KIND[category]} />
-          <p className="side-tab-hint">Drag onto the canvas</p>
-        </div>
-      ))}
-      <div className="side-tab-footer">
-        {UTILITY_KINDS.map((kind) => (
-          <CardChip key={kind} kind={kind} />
-        ))}
+      <div className="side-tab-body">
+        <CardChip kind={CATEGORY_KIND[category]} />
+        <p className="side-tab-hint">Drag onto the {category.toLowerCase()} canvas</p>
       </div>
     </aside>
   )

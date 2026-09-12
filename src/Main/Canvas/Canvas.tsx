@@ -14,8 +14,9 @@ import {
   type DragEvent,
   type PointerEvent,
 } from 'react'
-import type { AnchorSide, CanvasUser, CardKind, Edge, EdgeEndpoint } from '../../liveblocks/types'
+import type { AnchorSide, CanvasCategory, CanvasUser, CardKind, Edge, EdgeEndpoint } from '../../liveblocks/types'
 import { defaultContentFor, parseCardKind } from '../cardContent'
+import { CATEGORY_KIND } from '../categories'
 import { CARD_MIME } from '../cardMime'
 import { Card } from './Card'
 import { EdgeLayer, type DraftEdge } from './EdgeLayer'
@@ -50,7 +51,12 @@ function isCardDrag(dataTransfer: DataTransfer) {
   return Array.from(dataTransfer.types).includes(CARD_MIME)
 }
 
-export function Canvas() {
+type CanvasProps = {
+  category: CanvasCategory
+  cameraControls: ReturnType<typeof useCamera>
+}
+
+export function Canvas({ category, cameraControls }: CanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const panStart = useRef<PanStart | null>(null)
   const [panning, setPanning] = useState(false)
@@ -59,11 +65,20 @@ export function Canvas() {
   const [draft, setDraft] = useState<DraftEdge | null>(null)
 
   const { camera, canZoomIn, canZoomOut, panBy, zoomBy, zoomIn, zoomOut, resetCamera } =
-    useCamera()
+    cameraControls
 
-  const cards = useStorage((root) => root.cards)
-  const edges = useStorage((root) => root.edges)
-  const others = useOthers()
+  const allCards = useStorage((root) => root.cards)
+  const allEdges = useStorage((root) => root.edges)
+  const cards = useMemo(() => Object.fromEntries(
+    Object.entries(allCards).filter(([, card]) => card.content._tag === CATEGORY_KIND[category]),
+  ), [allCards, category])
+  const edges = useMemo(() => Object.fromEntries(
+    Object.entries(allEdges).filter(([, edge]) => cards[edge.from.cardId] && cards[edge.to.cardId]),
+  ), [allEdges, cards])
+  const allOthers = useOthers()
+  const others = useMemo(() => allOthers.filter(
+    ({ presence }) => (presence.activeCategory ?? 'Hotels') === category,
+  ), [allOthers, category])
   const updateMyPresence = useUpdateMyPresence()
   const myUser = useSelf((me) => me.presence.user, shallow)
   const myConnectionId = useSelf((me) => me.connectionId)
@@ -341,13 +356,10 @@ export function Canvas() {
     })
 
     const kind = parseCardKind(event.dataTransfer.getData(CARD_MIME))
-    const id = addCardAt(kind, world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
+    if (kind !== CATEGORY_KIND[category]) return
+    addCardAt(kind, world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
 
-    // A blank card is empty by definition, so it opens ready to type instead of making
-    // the double-click gesture something you have to discover first.
-    if (kind === 'BlankCard') {
-      updateMyPresence({ editingCardId: id, selectedCardId: id, selectedEdgeId: null })
-    }
+
   }
 
   const panMode = spaceHeld || panning
