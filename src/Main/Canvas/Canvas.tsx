@@ -6,9 +6,14 @@ import {
   useStorage,
   useUpdateMyPresence,
 } from '@liveblocks/react/suspense'
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import type { CanvasUser } from '../../liveblocks/types'
-import { TopBar } from '../ui/TopBar'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type PointerEvent,
+} from 'react'
 import { Card } from './Card'
 import { RemoteCursor } from './RemoteCursor'
 import { screenToWorld, useCamera } from './useCamera'
@@ -27,22 +32,23 @@ type PanStart = {
   moved: boolean
 }
 
-type CanvasProps = {
-  onChangeName: () => void
+export type CanvasHandle = {
+  addCard: () => void
 }
 
-export function Canvas({ onChangeName }: CanvasProps) {
+export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const panStart = useRef<PanStart | null>(null)
   const [panning, setPanning] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
 
-  const { camera, canZoomIn, canZoomOut, panBy, zoomBy, zoomIn, zoomOut, resetCamera } = useCamera()
+  const { camera, canZoomIn, canZoomOut, panBy, zoomBy, zoomIn, zoomOut, resetCamera } =
+    useCamera()
 
   const cards = useStorage((root) => root.cards)
   const others = useOthers()
   const updateMyPresence = useUpdateMyPresence()
-  const myUser = useSelf<CanvasUser>((me) => me.presence.user, shallow)
+  const myUser = useSelf((me) => me.presence.user, shallow)
   const mySelectedCardId = useSelf((me) => me.presence.selectedCardId)
 
   const addCard = useMutation(
@@ -67,6 +73,8 @@ export function Canvas({ onChangeName }: CanvasProps) {
     },
     [camera],
   )
+
+  useImperativeHandle(ref, () => ({ addCard }), [addCard])
 
   const moveCard = useMutation(({ storage }, id: string, x: number, y: number) => {
     const cards = storage.get('cards')
@@ -93,7 +101,6 @@ export function Canvas({ onChangeName }: CanvasProps) {
         panBy(-event.deltaX * scale, -event.deltaY * scale)
       }
     }
-
 
     viewport.addEventListener('wheel', handleWheel, { passive: false })
     return () => viewport.removeEventListener('wheel', handleWheel)
@@ -178,76 +185,64 @@ export function Canvas({ onChangeName }: CanvasProps) {
       : 'canvas'
 
   return (
-    <div className="app">
-      <TopBar
-        self={myUser}
-        others={others.map(({ connectionId, presence }) => ({
-          connectionId,
-          user: presence.user,
-        }))}
-        onAddCard={addCard}
-        onChangeName={onChangeName}
-      />
-
+    <div
+      ref={viewportRef}
+      className={viewportClass}
+      style={{
+        backgroundSize: `${GRID_SIZE * camera.zoom}px ${GRID_SIZE * camera.zoom}px`,
+        backgroundPosition: `${camera.x}px ${camera.y}px`,
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerLeave={() => updateMyPresence({ cursor: null })}
+    >
       <div
-        ref={viewportRef}
-        className={viewportClass}
-        style={{
-          backgroundSize: `${GRID_SIZE * camera.zoom}px ${GRID_SIZE * camera.zoom}px`,
-          backgroundPosition: `${camera.x}px ${camera.y}px`,
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onPointerLeave={() => updateMyPresence({ cursor: null })}
+        className="canvas-world"
+        style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}
       >
-        <div
-          className="canvas-world"
-          style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}
-        >
-          {Object.values(cards).map((card) => (
-            <Card
-              key={card.id}
-              card={card}
-              myColor={myUser.color}
+        {Object.values(cards).map((card) => (
+          <Card
+            key={card.id}
+            card={card}
+            myColor={myUser.color}
+            zoom={camera.zoom}
+            panMode={panMode}
+            selectedByMe={mySelectedCardId === card.id}
+            selectedByOthers={others
+              .filter(({ presence }) => presence.selectedCardId === card.id)
+              .map(({ presence }) => presence.user)}
+            onSelect={(id) => updateMyPresence({ selectedCardId: id })}
+            onMove={moveCard}
+          />
+        ))}
+
+        {others.map(({ connectionId, presence }) =>
+          presence.cursor ? (
+            <RemoteCursor
+              key={connectionId}
+              x={presence.cursor.x}
+              y={presence.cursor.y}
               zoom={camera.zoom}
-              panMode={panMode}
-              selectedByMe={mySelectedCardId === card.id}
-              selectedByOthers={others
-                .filter(({ presence }) => presence.selectedCardId === card.id)
-                .map(({ presence }) => presence.user)}
-              onSelect={(id) => updateMyPresence({ selectedCardId: id })}
-              onMove={moveCard}
+              name={presence.user.name}
+              color={presence.user.color}
             />
-          ))}
-
-          {others.map(({ connectionId, presence }) =>
-            presence.cursor ? (
-              <RemoteCursor
-                key={connectionId}
-                x={presence.cursor.x}
-                y={presence.cursor.y}
-                zoom={camera.zoom}
-                name={presence.user.name}
-                color={presence.user.color}
-              />
-            ) : null,
-          )}
-        </div>
-
-        <ZoomControls
-          zoom={camera.zoom}
-          canZoomIn={canZoomIn}
-          canZoomOut={canZoomOut}
-          onZoomIn={() => zoomIn(viewportCenter(viewportRef.current))}
-          onZoomOut={() => zoomOut(viewportCenter(viewportRef.current))}
-          onReset={resetCamera}
-        />
+          ) : null,
+        )}
       </div>
+
+      <ZoomControls
+        zoom={camera.zoom}
+        canZoomIn={canZoomIn}
+        canZoomOut={canZoomOut}
+        onZoomIn={() => zoomIn(viewportCenter(viewportRef.current))}
+        onZoomOut={() => zoomOut(viewportCenter(viewportRef.current))}
+        onReset={resetCamera}
+      />
     </div>
   )
-}
+})
 
 function viewportCenter(viewport: HTMLDivElement | null) {
   return {
