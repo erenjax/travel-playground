@@ -3,7 +3,7 @@ import { shallow } from '@liveblocks/client'
 import { useMutation, useOthers, useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
 import { Link, useParams } from 'react-router-dom'
 import type { CanvasCategory } from '../liveblocks/types'
-import { resolvePlaceAnchor, showAnchorOnTab, type LastSpot } from '../lib/placeAnchor'
+import { resolvePlaceAnchor, sameSpot, showAnchorOnTab, type LastSpot } from '../lib/placeAnchor'
 import { cardTitle, categoryOfKind, placeFromCard } from '../lib/placeFromCard'
 import { formatTripRange } from '../lib/tripDraft'
 import { Canvas } from './Canvas/Canvas'
@@ -106,11 +106,13 @@ export function Main() {
     const place = placeFromCard(card.content)
     const sourceCategory = categoryOfKind(card.content._tag)
     if (!place || !sourceCategory) return
-    setLastSpot({
+    const next: LastSpot = {
       place,
       category: sourceCategory,
       title: cardTitle(card.content) ?? place.label,
-    })
+    }
+    // Keep the same object unless the spot changed, so unrelated card edits don't refetch suggestions.
+    setLastSpot((prev) => (sameSpot(prev, next) ? prev : next))
   }, [selectedCardId, cards])
 
   function selectCategory(next: CanvasCategory) {

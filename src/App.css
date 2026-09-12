@@ -1507,14 +1507,59 @@
 
 .side-tab-header {
   flex-shrink: 0;
-  height: 48px;
+  min-height: 48px;
   display: flex;
-  align-items: center;
-  padding: 0 14px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
   font-weight: 500;
   color: var(--text-h);
+}
+
+.side-tab-header-title {
+  line-height: 20px;
+}
+
+/* Subheader under the category title: "Near <spot>" and its Clear button. */
+.side-tab-near {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--text);
+}
+
+.side-tab-near-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-tab-near-from {
+  color: var(--accent);
+}
+
+.side-tab-near-away .side-tab-near-label {
+  color: var(--accent);
+}
+
+.side-tab-near-clear {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .side-tab-body {
@@ -1581,51 +1626,6 @@
 .side-tab-search:focus-visible {
   outline: 2px solid var(--text-h);
   outline-offset: -1px;
-}
-
-.side-tab-anchor {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--canvas-bg);
-}
-
-.side-tab-anchor-away {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, #fff);
-}
-
-.side-tab-anchor-copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.side-tab-anchor-near {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-.side-tab-anchor-from {
-  font-size: 11px;
-  color: var(--accent);
-}
-
-.side-tab-anchor-clear {
-  flex-shrink: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
 }
 
 .side-tab-places {

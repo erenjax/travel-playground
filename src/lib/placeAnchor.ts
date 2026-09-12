@@ -13,6 +13,17 @@ export type PlaceAnchor = {
   title: string
 }
 
+export function sameSpot(a: LastSpot | null, b: LastSpot | null): boolean {
+  if (!a || !b) return a === b
+  return (
+    a.category === b.category &&
+    a.title === b.title &&
+    a.place.label === b.place.label &&
+    a.place.lat === b.place.lat &&
+    a.place.lng === b.place.lng
+  )
+}
+
 export function resolvePlaceAnchor(
   lastSpot: LastSpot | null,
   destination: Place | null | undefined,
