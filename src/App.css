@@ -801,11 +801,26 @@
   color: var(--text);
 }
 
+.card-BlankCard {
+  min-height: 96px;
+  border-color: rgba(28, 25, 23, 0.08);
+  font-family: 'Caveat', 'Segoe Print', 'Bradley Hand', cursive;
+}
+
 .card-BlankCard .card-lines {
-  font-size: 14px;
-  line-height: 19px;
+  font-size: 19px;
+  line-height: 23px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.card-BlankCard .card-editor {
+  font-size: 19px;
+  line-height: 23px;
+}
+
+.card-note-empty {
+  color: rgba(28, 25, 23, 0.4);
 }
 
 .card-editing {
@@ -1152,6 +1167,288 @@
 .edge-delete:hover {
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+/* Board tools */
+
+.board-toolbar-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.board-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  user-select: none;
+}
+
+.board-tool {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-h);
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.board-tool:hover {
+  background: var(--canvas-bg);
+  transform: translateY(-1px);
+}
+
+.board-tool-active,
+.board-tool-active:hover {
+  background: var(--teal);
+  color: #fff;
+}
+
+.board-tool-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.board-popover {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  user-select: none;
+}
+
+.board-popover-hint {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.board-popover-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--border);
+}
+
+.board-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.board-swatch:hover {
+  transform: scale(1.12);
+}
+
+.board-swatch-active {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--text-h);
+}
+
+.board-weight {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.board-weight span {
+  border-radius: 50%;
+}
+
+.board-weight:hover,
+.board-weight-active {
+  background: var(--canvas-bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.board-sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: 2px;
+}
+
+.board-emoji {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.board-emoji:hover {
+  background: var(--canvas-bg);
+  transform: scale(1.2);
+}
+
+.board-emoji-active {
+  background: var(--canvas-bg);
+  box-shadow: inset 0 0 0 1.5px var(--teal);
+}
+
+/* Tool cursors. Placement tools ignore whatever is under the pointer so a note or
+   sticker can land on top of a card. */
+.canvas-tool-draw,
+.canvas-tool-erase {
+  cursor: crosshair;
+}
+
+.canvas-tool-note,
+.canvas-tool-sticker {
+  cursor: copy;
+}
+
+.canvas-tool-draw .card,
+.canvas-tool-erase .card,
+.canvas-tool-note .card,
+.canvas-tool-sticker .card,
+.canvas-tool-draw .sticker,
+.canvas-tool-erase .sticker,
+.canvas-tool-note .sticker,
+.canvas-tool-sticker .sticker,
+.canvas-tool-draw .edge-hit,
+.canvas-tool-erase .edge-hit,
+.canvas-tool-note .edge-hit,
+.canvas-tool-sticker .edge-hit {
+  pointer-events: none;
+}
+
+.canvas-tool-note .canvas-controls,
+.canvas-tool-sticker .canvas-controls,
+.canvas-tool-draw .canvas-controls,
+.canvas-tool-erase .canvas-controls {
+  cursor: default;
+}
+
+/* Ink */
+
+.stroke-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.stroke-ink,
+.stroke-halo,
+.stroke-hit {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.stroke-halo {
+  opacity: 0.35;
+}
+
+.stroke-hit {
+  stroke: transparent;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+/* Stickers */
+
+.sticker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  line-height: 1;
+  border-radius: 8px;
+  cursor: grab;
+  user-select: none;
+  filter: drop-shadow(0 4px 6px rgba(28, 25, 23, 0.18));
+}
+
+.sticker-emoji {
+  display: block;
+  padding: 2px;
+}
+
+.sticker-dragging {
+  cursor: grabbing;
+}
+
+.canvas-pan-ready .sticker {
+  cursor: grab;
+}
+
+.canvas-panning .sticker {
+  cursor: grabbing;
+}
+
+.sticker-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transform-origin: top right;
+  visibility: hidden;
+}
+
+.sticker:hover .sticker-delete,
+.sticker-selected .sticker-delete {
+  visibility: visible;
+}
+
+.sticker-delete:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.sticker-dragging .sticker-delete,
+.canvas-pan-ready .sticker-delete,
+.canvas-panning .sticker-delete {
+  visibility: hidden;
 }
 
 /* Side tab */
