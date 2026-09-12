@@ -14,7 +14,8 @@ import {
   type DragEvent,
   type PointerEvent,
 } from 'react'
-import type { AnchorSide, Edge, EdgeEndpoint } from '../../liveblocks/types'
+import type { AnchorSide, CanvasUser, CardKind, Edge, EdgeEndpoint } from '../../liveblocks/types'
+import { defaultContentFor, parseCardKind } from '../cardContent'
 import { CARD_MIME } from '../cardMime'
 import { Card } from './Card'
 import { EdgeLayer, type DraftEdge } from './EdgeLayer'
@@ -65,18 +66,30 @@ export function Canvas() {
   const others = useOthers()
   const updateMyPresence = useUpdateMyPresence()
   const myUser = useSelf((me) => me.presence.user, shallow)
+  const myConnectionId = useSelf((me) => me.connectionId)
   const mySelectedCardId = useSelf((me) => me.presence.selectedCardId)
   const mySelectedEdgeId = useSelf((me) => me.presence.selectedEdgeId)
+  const myEditingCardId = useSelf((me) => me.presence.editingCardId)
 
-  const addCardAt = useMutation(({ storage }, x: number, y: number) => {
+  const addCardAt = useMutation(({ storage }, kind: CardKind, x: number, y: number) => {
     const cards = storage.get('cards')
     const id = crypto.randomUUID()
 
     cards.set(id, {
       id,
-      text: 'New card',
       position: { x: Math.round(x), y: Math.round(y) },
+      content: defaultContentFor(kind),
     })
+
+    return id
+  }, [])
+
+  /** Only blank cards carry free text, so nothing else can be retagged by accident. */
+  const updateCardText = useMutation(({ storage }, id: string, text: string) => {
+    const cards = storage.get('cards')
+    const card = cards.get(id)
+    if (!card || card.content._tag !== 'BlankCard') return
+    cards.set(id, { ...card, content: { _tag: 'BlankCard', data: { text } } })
   }, [])
 
   const moveCard = useMutation(({ storage }, id: string, x: number, y: number) => {
@@ -119,6 +132,39 @@ export function Canvas() {
   const removeEdge = useMutation(({ storage }, id: string) => {
     storage.get('edges').delete(id)
   }, [])
+
+  /** Who is editing which card, keyed by card id, from everyone else's presence. */
+  const editors = useMemo(() => {
+    const claims: Record<string, { user: CanvasUser; connectionId: number }> = {}
+    for (const { connectionId, presence } of others) {
+      const cardId = presence.editingCardId
+      if (!cardId) continue
+      const held = claims[cardId]
+      if (!held || connectionId < held.connectionId) {
+        claims[cardId] = { user: presence.user, connectionId }
+      }
+    }
+    return claims
+  }, [others])
+
+  // Presence is a broadcast rather than a real lock, so two people can claim the same card
+  // in the same instant. The lowest connection id keeps it; everyone else drops to viewing.
+  useEffect(() => {
+    if (!myEditingCardId) return
+    const rival = editors[myEditingCardId]
+    if (rival && rival.connectionId < myConnectionId) {
+      updateMyPresence({ editingCardId: null })
+    }
+  }, [myEditingCardId, editors, myConnectionId, updateMyPresence])
+
+  function startEdit(cardId: string) {
+    if (editors[cardId]) return
+    updateMyPresence({ editingCardId: cardId, selectedCardId: cardId, selectedEdgeId: null })
+  }
+
+  function stopEdit() {
+    updateMyPresence({ editingCardId: null })
+  }
 
   function deleteSelectedEdge() {
     if (!mySelectedEdgeId) return
@@ -294,7 +340,14 @@ export function Canvas() {
       y: event.clientY - rect.top,
     })
 
-    addCardAt(world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
+    const kind = parseCardKind(event.dataTransfer.getData(CARD_MIME))
+    const id = addCardAt(kind, world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
+
+    // A blank card is empty by definition, so it opens ready to type instead of making
+    // the double-click gesture something you have to discover first.
+    if (kind === 'BlankCard') {
+      updateMyPresence({ editingCardId: id, selectedCardId: id, selectedEdgeId: null })
+    }
   }
 
   const panMode = spaceHeld || panning
@@ -370,9 +423,14 @@ export function Canvas() {
             selectedByOthers={others
               .filter(({ presence }) => presence.selectedCardId === card.id)
               .map(({ presence }) => presence.user)}
+            editing={myEditingCardId === card.id}
+            editedByOther={editors[card.id]?.user}
             onSelect={(id) => updateMyPresence({ selectedCardId: id, selectedEdgeId: null })}
             onMove={moveCard}
             onStartConnect={startConnect}
+            onStartEdit={startEdit}
+            onEndEdit={stopEdit}
+            onChangeText={updateCardText}
           />
         ))}
 

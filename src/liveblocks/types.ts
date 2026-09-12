@@ -9,14 +9,137 @@ export type Presence = {
   cursor: { x: number; y: number } | null
   selectedCardId: string | null
   selectedEdgeId: string | null
+  /**
+   * Claims a card for text editing. Card text is a plain string with no per-character
+   * merge, so this keeps it to one writer at a time rather than letting two people
+   * overwrite each other.
+   */
+  editingCardId: string | null
   user: CanvasUser
 }
 
-/** Readonly because `useStorage` hands out immutable snapshots of storage. */
+/**
+ * A spot on the map. `label` is what a card shows; the coordinates are optional so a
+ * card can be filled in before it has been resolved to a real place.
+ */
+export type Place = {
+  readonly label: string
+  readonly address?: string
+  readonly lat?: number
+  readonly lng?: number
+}
+
+export type Money = {
+  readonly amount: number
+  /** ISO 4217, e.g. `USD`. */
+  readonly currency: string
+}
+
+/**
+ * Dates and times are ISO 8601 strings because storage round-trips through JSON and a
+ * `Date` would not survive. Times carry no zone: they are wall-clock at the place they
+ * describe, so a flight leaving at `2026-10-02T08:15` leaves at 08:15 where it takes off.
+ */
+export type HotelCard = {
+  readonly _tag: 'HotelCard'
+  readonly data: {
+    readonly name: string
+    readonly imageUrl: string
+    readonly location: Place
+    /** Total for the stay, not per night. */
+    readonly price: Money
+    readonly checkIn: string
+    readonly checkOut: string
+  }
+}
+
+export type FlightLeg = {
+  readonly place: Place
+  readonly time: string
+}
+
+export type FlightStop = {
+  readonly place: Place
+  readonly layoverMinutes?: number
+}
+
+export type FlightCard = {
+  readonly _tag: 'FlightCard'
+  readonly data: {
+    readonly airline: string
+    readonly flightNumber?: string
+    readonly departure: FlightLeg
+    readonly arrival: FlightLeg
+    /**
+     * Empty means nonstop. The array element type is mutable because Liveblocks' `Lson`
+     * constraint rejects `readonly T[]`; treat it as read-only anyway.
+     */
+    readonly stops: FlightStop[]
+  }
+}
+
+/** A sight or an event. Events fill in the time window; sights usually leave it out. */
+export type AttractionCard = {
+  readonly _tag: 'AttractionCard'
+  readonly data: {
+    readonly name: string
+    readonly location: Place
+    readonly imageUrl?: string
+    readonly price?: Money
+    readonly startsAt?: string
+    readonly endsAt?: string
+  }
+}
+
+export type FoodCard = {
+  readonly _tag: 'FoodCard'
+  readonly data: {
+    readonly name: string
+    readonly location: Place
+    readonly cuisine?: string
+    /** 1 through 4, rendered as `$` to `$$$$`. */
+    readonly priceLevel?: 1 | 2 | 3 | 4
+    readonly reservationAt?: string
+    readonly imageUrl?: string
+  }
+}
+
+export type PhotoCard = {
+  readonly _tag: 'PhotoCard'
+  readonly data: {
+    readonly imageUrl: string
+    readonly caption?: string
+  }
+}
+
+/** The plain sticky note: free text, no travel semantics. */
+export type BlankCard = {
+  readonly _tag: 'BlankCard'
+  readonly data: {
+    readonly text: string
+  }
+}
+
+export type CardContent =
+  | HotelCard
+  | FlightCard
+  | AttractionCard
+  | FoodCard
+  | PhotoCard
+  | BlankCard
+
+export type CardKind = CardContent['_tag']
+
+/**
+ * The canvas envelope: where a card sits, plus what it holds. Keeping content nested
+ * means everything that only moves cards around stays indifferent to card types.
+ *
+ * Readonly because `useStorage` hands out immutable snapshots of storage.
+ */
 export type Card = {
   readonly id: string
-  readonly text: string
   readonly position: { readonly x: number; readonly y: number }
+  readonly content: CardContent
 }
 
 /** The edge of a card a connector attaches to. */

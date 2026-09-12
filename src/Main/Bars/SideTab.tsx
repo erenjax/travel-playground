@@ -1,10 +1,40 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { CARD_KIND_HINTS, CARD_KIND_LABELS } from '../cardContent'
 import { CARD_MIME } from '../cardMime'
+import type { CardKind } from '../../liveblocks/types'
 
 const categories = ['Hotels', 'Flights', 'Attractions', 'Food'] as const
 
+/** Each category tab offers the one card kind it stands for. */
+const CATEGORY_KIND: Record<(typeof categories)[number], CardKind> = {
+  Hotels: 'HotelCard',
+  Flights: 'FlightCard',
+  Attractions: 'AttractionCard',
+  Food: 'FoodCard',
+}
+
+/** Not travel searches, so they sit below the tabs and stay reachable from any category. */
+const UTILITY_KINDS: readonly CardKind[] = ['BlankCard', 'PhotoCard']
+
 const MIN_WIDTH = 260
 const MAX_WIDTH = 600
+
+function CardChip({ kind }: { kind: CardKind }) {
+  return (
+    <div
+      className="side-tab-card"
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData(CARD_MIME, kind)
+        event.dataTransfer.setData('text/plain', CARD_KIND_LABELS[kind])
+        event.dataTransfer.effectAllowed = 'copy'
+      }}
+    >
+      <span className="side-tab-card-title">{CARD_KIND_LABELS[kind]}</span>
+      <span className="side-tab-card-hint">{CARD_KIND_HINTS[kind]}</span>
+    </div>
+  )
+}
 
 type SideTabProps = {
   width: number
@@ -127,20 +157,15 @@ export function SideTab({ width, onResize }: SideTabProps) {
           tabIndex={0}
         >
           <h2 className="side-tab-panel-title">{category} category</h2>
-          <div
-            className="side-tab-card"
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData(CARD_MIME, 'new')
-              event.dataTransfer.setData('text/plain', 'New card')
-              event.dataTransfer.effectAllowed = 'copy'
-            }}
-          >
-            New card
-          </div>
+          <CardChip kind={CATEGORY_KIND[category]} />
           <p className="side-tab-hint">Drag onto the canvas</p>
         </div>
       ))}
+      <div className="side-tab-footer">
+        {UTILITY_KINDS.map((kind) => (
+          <CardChip key={kind} kind={kind} />
+        ))}
+      </div>
     </aside>
   )
 }
