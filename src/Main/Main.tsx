@@ -1,35 +1,60 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
+import { shallow } from '@liveblocks/client'
+import { useOthers, useSelf, useStorage, useUpdateMyPresence } from '@liveblocks/react/suspense'
 import { Link, useParams } from 'react-router-dom'
 import type { CanvasCategory } from '../liveblocks/types'
 import { resolvePlaceAnchor, showAnchorOnTab, type LastSpot } from '../lib/placeAnchor'
 import { cardTitle, categoryOfKind, placeFromCard } from '../lib/placeFromCard'
 import { formatTripRange } from '../lib/tripDraft'
 import { Canvas } from './Canvas/Canvas'
+import { CardBody } from './Canvas/CardBody'
 import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
+import { ConnectedUsers } from './ConnectedUsers'
 import { CATEGORIES, CATEGORY_KIND } from './categories'
 import { summarizeGroupVotes } from '../lib/cardVotes'
 import type { Card as CardData } from '../liveblocks/types'
 
+type ActiveTab = CanvasCategory | 'Itinerary'
+type Itinerary = { days: { date: string; title: string; activities: { cardId: string; name: string; category: string; note: string }[] }[] }
+
 export function Main() {
   const [sidebarWidth, setSidebarWidth] = useState(300)
-  const [category, setCategory] = useState<CanvasCategory>('Hotels')
+  const [category, setCategory] = useState<ActiveTab>('Hotels')
   const [copied, setCopied] = useState(false)
   const [lastSpot, setLastSpot] = useState<LastSpot | null>(null)
+  const [itinerary, setItinerary] = useState<Itinerary | null>(null)
+  const [itineraryBusy, setItineraryBusy] = useState(false)
+  const [itineraryError, setItineraryError] = useState('')
   const destination = useStorage((root) => root.destination)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
   const updateMyPresence = useUpdateMyPresence()
-  const cameraControls = useCamera(category)
+  const myUser = useSelf((me) => me.presence.user, shallow)
+  const others = useOthers()
+  const cameraControls = useCamera(category === 'Itinerary' ? 'Hotels' : category)
   const { roomId } = useParams()
   const cards = useStorage((root) => root.cards)
+  const edges = useStorage((root) => root.edges)
   const startDate = useStorage((root) => root.startDate)
   const endDate = useStorage((root) => root.endDate)
   const selectedCardId = useSelf((me) => me.presence.selectedCardId)
   const dateLabel = formatTripRange(startDate ?? '', endDate ?? '')
   const placeLabel = destination?.label.trim() ?? ''
   const anchor = resolvePlaceAnchor(lastSpot, destination)
+  async function createItinerary() {
+    setItineraryBusy(true)
+    setItineraryError('')
+    try {
+      const response = await fetch('/api/itinerary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ destination: placeLabel, startDate, endDate, cards: Object.values(cards).map((card) => ({ id: card.id, type: card.content._tag, name: contenderName(card.content), address: 'location' in card.content.data ? card.content.data.location.label : '', cuisine: card.content._tag === 'FoodCard' ? card.content.data.cuisine ?? '' : '' })), edges: Object.values(edges).filter((edge) => edge.arrow && edge.arrow !== 'none').map((edge) => ({ from: edge.from.cardId, to: edge.to.cardId, arrow: edge.arrow })) }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not create itinerary.')
+      setItinerary(data)
+      setCategory('Itinerary')
+    } catch (error) { setItineraryError(error instanceof Error ? error.message : 'Could not create itinerary.') }
+    finally { setItineraryBusy(false) }
+  }
   const topContenders = useMemo(() => {
+    if (category === 'Itinerary') return []
     const kind = CATEGORY_KIND[category]
     const categoryCards = Object.values(cards).filter((card): card is CardData => card.content._tag === kind)
     return summarizeGroupVotes(categoryCards).ranking.filter((card) => card.score > 0).slice(0, 3)
@@ -105,13 +130,17 @@ export function Main() {
               onKeyDown={(event) => handleTabKeyDown(event, index)}
             >
               {item}
-              {showAnchorOnTab(anchor, item, category) && (
+              {category !== 'Itinerary' && showAnchorOnTab(anchor, item, category) && (
                 <span className="canvas-tab-spot">{anchor?.title}</span>
               )}
             </button>
           ))}
+          {itinerary && <button type="button" role="tab" className="canvas-tab" aria-selected={category === 'Itinerary'} onClick={() => setCategory('Itinerary')}>Itinerary</button>}
         </div>
-        {roomId && (
+        {roomId && <div className="canvas-header-actions">
+          <button type="button" className="canvas-itinerary-button" onClick={() => void createItinerary()} disabled={itineraryBusy || Object.keys(cards).length === 0}>
+            {itineraryBusy ? 'Creating…' : 'Create itinerary'}
+          </button>
           <button
             type="button"
             className="canvas-invite"
@@ -123,9 +152,14 @@ export function Main() {
           >
             {copied ? 'Copied' : 'Copy invite'}
           </button>
-        )}
+          <ConnectedUsers
+            self={myUser}
+            others={others.map(({ connectionId, presence }) => ({ connectionId, user: presence.user }))}
+          />
+        </div>}
       </header>
-      <div className="top-contenders-bar" aria-label="Top contenders">
+      {itineraryError && <div className="itinerary-error" role="alert">{itineraryError}</div>}
+      {category !== 'Itinerary' && <div className="top-contenders-bar" aria-label="Top contenders">
         <span className="top-contenders-label">Top contenders</span>
         <div className="top-contenders-list">
           {topContenders.map((contender, index) => (
@@ -142,7 +176,7 @@ export function Main() {
             </button>
           ))}
         </div>
-      </div>
+      </div>}
       {CATEGORIES.map((item) => (
         <div
           key={item}
@@ -168,6 +202,7 @@ export function Main() {
           )}
         </div>
       ))}
+      {itinerary && <div className="app-body itinerary-body" hidden={category !== 'Itinerary'}><ItineraryCanvas itinerary={itinerary} cards={cards} /></div>}
     </div>
   )
 }
@@ -185,4 +220,44 @@ function contenderName(content: CardData['content']) {
     case 'BlankCard':
       return content.data.text || 'Blank card'
   }
+}
+
+function ItineraryCanvas({ itinerary, cards }: { itinerary: Itinerary; cards: Record<string, CardData> }) {
+  const [days, setDays] = useState(itinerary.days)
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
+  useEffect(() => setDays(itinerary.days), [itinerary.days])
+
+  function moveCard(dayDate: string, cardId = draggedCardId) {
+    if (!cardId) return
+    setDays((current) => {
+      const activity = current.flatMap((day) => day.activities).find((item) => item.cardId === cardId)
+      if (!activity) return current
+      return current.map((day) => ({
+        ...day,
+        activities: day.date === dayDate
+          ? [...day.activities.filter((item) => item.cardId !== cardId), activity]
+          : day.activities.filter((item) => item.cardId !== cardId),
+      }))
+    })
+    setDraggedCardId(null)
+  }
+
+  return (
+    <div className="itinerary-canvas">
+      <div className="itinerary-columns">
+        {days.map((day) => (
+          <section className="itinerary-column" key={day.date} onDragOver={(event) => event.preventDefault()} onDrop={() => moveCard(day.date)}>
+            <header><strong>{day.date}</strong><span>{day.title}</span></header>
+            <div className="itinerary-column-cards">
+              {day.activities.map((activity) => {
+                const card = cards[activity.cardId]
+                if (!card) return null
+                return <article className="itinerary-card" key={activity.cardId} draggable onDragStart={(event) => { setDraggedCardId(activity.cardId); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', activity.cardId) }} onDragEnd={() => setDraggedCardId(null)}><CardBody content={card.content} /><p>{activity.note}</p><label className="itinerary-move"><span>Move to</span><select value={day.date} onChange={(event) => moveCard(event.target.value, activity.cardId)} onPointerDown={(event) => event.stopPropagation()}>{days.map((option) => <option key={option.date} value={option.date}>{option.date}</option>)}</select></label></article>
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  )
 }
