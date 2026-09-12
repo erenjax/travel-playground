@@ -222,7 +222,7 @@
 
 .canvas-controls {
   position: absolute;
-  right: calc(var(--sidebar-width, 260px) + 12px);
+  left: 12px;
   bottom: 12px;
   z-index: 5;
   display: flex;

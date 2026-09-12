@@ -62,7 +62,7 @@ export default function App() {
         }}
       >
         <ClientSideSuspense fallback={<div className="status">Connecting to {ROOM_ID}…</div>}>
-          <Main onChangeName={() => setEditingName(true)} />
+          <Main />
         </ClientSideSuspense>
       </RoomProvider>
     </LiveblocksProvider>
