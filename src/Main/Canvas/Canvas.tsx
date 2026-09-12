@@ -21,8 +21,8 @@ import type { AnchorSide, CanvasCategory, CanvasUser, CardContent, Edge, EdgeEnd
 import { toggleCardVote } from '../../lib/cardVotes'
 import { edgeIdsAttachedTo } from '../../lib/removeCard'
 import { getVoterId } from '../../lib/voterId'
-import { defaultContentFor, parseCardKind } from '../cardContent'
-import { parseSuggestions, suggestionContent, SUGGESTION_MIME } from '../suggestions'
+import { defaultContentFor } from '../cardContent'
+import { parseCardDrag } from '../cardDrag'
 import { CATEGORY_KIND } from '../categories'
 import { CARD_MIME } from '../cardMime'
 import { Card } from './Card'
@@ -417,17 +417,9 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
       y: event.clientY - rect.top,
     })
 
-    const kind = parseCardKind(event.dataTransfer.getData(CARD_MIME))
+    const { kind, fill } = parseCardDrag(event.dataTransfer.getData(CARD_MIME))
     if (kind !== CATEGORY_KIND[category]) return
-    let content = defaultContentFor(kind)
-    const suggestionPayload = event.dataTransfer.getData(SUGGESTION_MIME)
-    if (suggestionPayload) {
-      try {
-        const [suggestion] = parseSuggestions([JSON.parse(suggestionPayload)])
-        content = suggestionContent(category, suggestion)
-      } catch { return }
-    }
-    addCardAt(content, world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
+    addCardAt(defaultContentFor(kind, fill), world.x - CARD_WIDTH / 2, world.y - CARD_HEIGHT / 2)
 
 
   }
