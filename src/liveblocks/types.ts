@@ -20,6 +20,7 @@ export type Card = {
 
 export type Storage = {
   cards: LiveMap<string, Card>
+  tripTitle: string
 }
 
 declare global {
