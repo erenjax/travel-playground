@@ -1835,13 +1835,33 @@
 }
 
 .canvas-home-link {
-  font-size: 13px;
-  color: var(--text);
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-h);
   text-decoration: none;
 }
 
 .canvas-home-link:hover {
-  color: var(--text-h);
+  background: var(--canvas-bg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .canvas-trip-meta {
@@ -1868,6 +1888,22 @@
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.canvas-trip-title-input {
+  width: max-content;
+  max-width: min(42vw, 420px);
+  min-width: 8ch;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid var(--teal);
+  outline: none;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
 .canvas-invite {

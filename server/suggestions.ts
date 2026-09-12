@@ -18,14 +18,19 @@ function ensureDailyActivityAndMeal(value: { days?: unknown[] }, rawCards: unkno
   }).map((day) => ({ ...day, activities: day.activities.filter((item): item is ItineraryActivity => Boolean(item && typeof item.cardId === 'string' && typeof item.name === 'string' && typeof item.category === 'string' && typeof item.note === 'string')) }))
   if (days.length === 0) return { days: [] }
 
-  const cards = rawCards.filter((card): card is { id: string; type: string; name: string; cuisine: string } => Boolean(card && typeof card === 'object' && typeof (card as { id?: unknown }).id === 'string' && typeof (card as { type?: unknown }).type === 'string')).map((card) => ({ id: card.id, type: card.type, name: typeof card.name === 'string' ? card.name : card.id, cuisine: typeof card.cuisine === 'string' ? card.cuisine : '' }))
+  const allCards = rawCards.filter((card): card is { id: string; type: string; name: string; cuisine: string; votes: number } => Boolean(card && typeof card === 'object' && typeof (card as { id?: unknown }).id === 'string' && typeof (card as { type?: unknown }).type === 'string')).map((card) => ({ id: card.id, type: card.type, name: typeof card.name === 'string' ? card.name : card.id, cuisine: typeof card.cuisine === 'string' ? card.cuisine : '', votes: typeof card.votes === 'number' && Number.isFinite(card.votes) ? card.votes : 0 }))
+  const byVotes = (left: typeof allCards[number], right: typeof allCards[number]) => right.votes - left.votes
+  const highestHotel = allCards.filter((card) => card.type === 'HotelCard').sort(byVotes)[0]
+  const foodLimit = days.length * 2
+  const selectedFoodIds = new Set(allCards.filter((card) => card.type === 'FoodCard').sort(byVotes).slice(0, foodLimit).map((card) => card.id))
+  const cards = allCards.filter((card) => card.type !== 'HotelCard' && (card.type !== 'FoodCard' || selectedFoodIds.has(card.id)) || card.id === highestHotel?.id)
   const cardById = new Map(cards.map((card) => [card.id, card]))
   const generatedById = new Map<string, ItineraryActivity>()
   for (const day of days) for (const activity of day.activities) {
     if (cardById.has(activity.cardId) && !generatedById.has(activity.cardId)) generatedById.set(activity.cardId, activity)
   }
   const orderedCards = [...generatedById.keys(), ...cards.map((card) => card.id).filter((id) => !generatedById.has(id))]
-    .map((id) => cardById.get(id)).filter((card): card is { id: string; type: string; name: string; cuisine: string } => Boolean(card))
+    .map((id) => cardById.get(id)).filter((card): card is { id: string; type: string; name: string; cuisine: string; votes: number } => Boolean(card))
   const activityFor = (card: { id: string; type: string; name: string; cuisine: string }): ItineraryActivity => generatedById.get(card.id) ?? {
     cardId: card.id,
     name: card.name,
@@ -59,9 +64,9 @@ function ensureDailyActivityAndMeal(value: { days?: unknown[] }, rawCards: unkno
         const meals = day.activities.filter((item) => cardById.get(item.cardId)?.type === 'FoodCard').length
         const bestMeals = best.activities.filter((item) => cardById.get(item.cardId)?.type === 'FoodCard').length
         return meals < bestMeals ? day : best
-      }, rebuilt[index % rebuilt.length])
-      target.activities.push(activityFor(card))
-    } else rebuilt[index % rebuilt.length].activities.push(activityFor(card))
+      }, rebuilt[index % rebuilt.length]!)
+      if (target.activities.filter((item) => cardById.get(item.cardId)?.type === 'FoodCard').length < 2) target.activities.push(activityFor(card))
+    } else rebuilt[index % rebuilt.length]!.activities.push(activityFor(card))
   })
   const edges = rawEdges.filter((edge): edge is ItineraryEdge => Boolean(edge && typeof edge === 'object' && typeof (edge as { from?: unknown }).from === 'string' && typeof (edge as { to?: unknown }).to === 'string'))
   for (const edge of edges) {
@@ -76,7 +81,7 @@ function ensureDailyActivityAndMeal(value: { days?: unknown[] }, rawCards: unkno
   return { days: rebuilt }
 }
 
-export function suggestionsPlugin(apiKey: string, model: string): Plugin {
+export function suggestionsPlugin(apiKey: string, model: string, itineraryModel = model): Plugin {
   const cache = new Map<string, { expiresAt: number; response: SearchResponse }>()
   const pending = new Map<string, Promise<SearchResponse>>()
   const itineraryCache = new Map<string, { expiresAt: number; body: unknown }>()
@@ -92,20 +97,31 @@ export function suggestionsPlugin(apiKey: string, model: string): Plugin {
       try {
         let raw = ''
         for await (const chunk of req) { raw += chunk; if (raw.length > 50000) return send(413, { error: 'Itinerary request is too large.' }) }
-        const input = JSON.parse(raw) as { destination?: string; startDate?: string; endDate?: string; cards?: unknown[]; edges?: unknown[] }
+        const input = JSON.parse(raw) as { destination?: string; startDate?: string; endDate?: string; refresh?: boolean; cards?: unknown[]; edges?: unknown[] }
         if (!input.destination || !input.startDate || !input.endDate || !Array.isArray(input.cards) || input.cards.length === 0) return send(400, { error: 'Add a destination and cards before creating an itinerary.' })
         const itineraryKey = JSON.stringify(input)
         const cachedItinerary = itineraryCache.get(itineraryKey)
-        if (cachedItinerary && cachedItinerary.expiresAt > Date.now()) return send(200, cachedItinerary.body)
+        if (!input.refresh && cachedItinerary && cachedItinerary.expiresAt > Date.now()) return send(200, cachedItinerary.body)
         const response = await fetch('https://api.x.ai/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(60000), body: JSON.stringify({
-          model, store: false, reasoning: { effort: 'low' }, max_output_tokens: 1400,
+          model: itineraryModel, store: false, reasoning: { effort: 'low' }, max_output_tokens: 1400,
           input: [
-            { role: 'system', content: 'Create a practical travel itinerary. Use every supplied card exactly once. For every day, schedule at least one AttractionCard and at least one substantial FoodCard restaurant when enough are available; distribute restaurant dinners one per day before adding a second dinner. Treat bakeries, cafes, coffee shops, brunch, and dessert places as light meals and place them before dinner. Cards connected by a directed arrow must be scheduled next to each other in from-to order, preferably on the same day. Then distribute remaining cards evenly. Group hotels, attractions, and restaurants by geographic proximity using names and addresses, avoiding unnecessary cross-city travel. Do not invent places, bookings, times, prices, or facts. Return only JSON matching the schema.' },
+            { role: 'system', content: 'Create a practical travel itinerary. Use supplied cards where they fit, with at most one HotelCard for the whole trip and at most two FoodCards (restaurants, cafes, bakeries, or other meals) per day. Vote scores are supplied on cards: prefer the highest-voted hotel and highest-voted food options, and omit lower-voted food options when the two-per-day limit would be exceeded. For every day, schedule at least one AttractionCard and at least one substantial FoodCard restaurant when enough are available; distribute restaurant dinners one per day before adding a second dinner. Treat bakeries, cafes, coffee shops, brunch, and dessert places as light meals and place them before dinner. Cards connected by a directed arrow must be scheduled next to each other in from-to order, preferably on the same day. Then distribute remaining cards evenly. Group hotels, attractions, and restaurants by geographic proximity using names and addresses, avoiding unnecessary cross-city travel. Do not invent places, bookings, times, prices, or facts. Return only JSON matching the schema.' },
             { role: 'user', content: JSON.stringify(input) },
           ],
           text: { format: { type: 'json_schema', name: 'travel_itinerary', strict: true, schema: { type: 'object', additionalProperties: false, properties: { days: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { date: { type: 'string' }, title: { type: 'string' }, activities: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { cardId: { type: 'string' }, name: { type: 'string' }, category: { type: 'string' }, note: { type: 'string' } }, required: ['cardId', 'name', 'category', 'note'] } } }, required: ['date', 'title', 'activities'] } } }, required: ['days'] } } },
         }) })
-        if (!response.ok) return send(502, { error: 'Grok could not create the itinerary. Check the API key balance and try again.' })
+        if (!response.ok) {
+          const failure = await response.json().catch(() => null) as { error?: string | { message?: string }; message?: string } | null
+          const message = typeof failure?.error === 'string' ? failure.error : failure?.error?.message || failure?.message || ''
+          const error = response.status === 402 || /credits|spending limit|billing|balance|quota/i.test(message)
+            ? 'Grok reports that the API credit or quota limit has been reached.'
+            : response.status === 401 || response.status === 403
+              ? 'Grok rejected the API key or model access.'
+              : response.status === 429
+                ? 'Grok is rate-limiting itinerary requests. Please try again shortly.'
+                : `Grok could not create the itinerary${message ? `: ${message.slice(0, 180)}` : '.'}`
+          return send(response.status === 429 ? 429 : 502, { error })
+        }
         const data = await response.json() as { output?: { type?: string; content?: { type?: string; text?: string }[] }[] }
         const text = (data.output ?? []).find((item) => item.type === 'message')?.content?.find((part) => part.type === 'output_text')?.text
         if (!text) throw new Error('Missing itinerary')
