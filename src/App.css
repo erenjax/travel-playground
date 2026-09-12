@@ -425,8 +425,8 @@
 
 /* Cards */
 
-/* Size is fixed and clipped rather than content-driven: connector anchors are placed from
-   CARD_WIDTH/CARD_HEIGHT in edgeGeometry.ts, so a card that grew would drift off them. */
+/* Width stays fixed so connector math can share CARD_WIDTH. Height hugs whatever the
+   card is holding; measured sizes go back to edgeGeometry so anchors stay on the box. */
 .card {
   position: absolute;
   top: 0;
@@ -435,9 +435,10 @@
   flex-direction: column;
   gap: 8px;
   width: 200px;
-  height: 164px;
+  height: auto;
+  min-height: 64px;
   padding: 10px 28px 10px 12px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fff;
@@ -500,11 +501,11 @@
   color: var(--text);
 }
 
-/* Blank cards are all text, so they get the room the other types spend on a header. */
 .card-BlankCard .card-lines {
-  flex: 1;
   font-size: 14px;
   line-height: 19px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .card-editing {
@@ -512,14 +513,15 @@
 }
 
 .card-editor {
-  flex: 1;
   width: 100%;
+  min-height: 57px;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
   font: inherit;
   line-height: 19px;
+  field-sizing: content;
   resize: none;
   outline: none;
 }
@@ -584,6 +586,50 @@
   font-weight: 650;
   line-height: 14px;
   color: var(--text-h);
+}
+
+.card-delete {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transform-origin: top left;
+  visibility: hidden;
+}
+
+.card:hover .card-delete,
+.card-selected .card-delete,
+.card-editing .card-delete {
+  visibility: visible;
+}
+
+.card-delete:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.card-delete:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  visibility: visible;
+}
+
+.card-dragging .card-delete,
+.canvas-pan-ready .card-delete,
+.canvas-panning .card-delete {
+  visibility: hidden;
 }
 
 /* Connector anchors */

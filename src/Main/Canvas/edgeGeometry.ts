@@ -2,11 +2,18 @@ import type { AnchorSide, ArrowMode, Card, Edge, EdgeEndpoint } from '../../live
 import type { Point } from './useCamera'
 
 /**
- * Cards are a fixed size whatever they hold, which is what lets anchors and connectors be
- * computed from position alone. These must stay in sync with `.card` in App.css.
+ * Width is fixed (`.card` in App.css). Height hugs content, so callers that need a
+ * real box pass a measured size; these defaults cover the first frame before that.
  */
 export const CARD_WIDTH = 200
 export const CARD_HEIGHT = 164
+
+export type CardSize = { readonly width: number; readonly height: number }
+export type CardSizeMap = Readonly<Record<string, CardSize>>
+
+export function sizeOf(sizes: CardSizeMap | undefined, cardId: string): CardSize {
+  return sizes?.[cardId] ?? { width: CARD_WIDTH, height: CARD_HEIGHT }
+}
 
 export const ANCHOR_SIDES: readonly AnchorSide[] = ['top', 'right', 'bottom', 'left']
 
@@ -49,23 +56,29 @@ const ARROW_HALF_WIDTH_PER_THICKNESS = 1.7
 const ARROW_HALF_WIDTH_BASE = 1.5
 
 /** World-space position of one of a card's four cardinal anchors. */
-export function anchorPoint(card: Card, side: AnchorSide): Point {
+export function anchorPoint(card: Card, side: AnchorSide, size?: CardSize): Point {
   const { x, y } = card.position
+  const width = size?.width ?? CARD_WIDTH
+  const height = size?.height ?? CARD_HEIGHT
   switch (side) {
     case 'top':
-      return { x: x + CARD_WIDTH / 2, y }
+      return { x: x + width / 2, y }
     case 'right':
-      return { x: x + CARD_WIDTH, y: y + CARD_HEIGHT / 2 }
+      return { x: x + width, y: y + height / 2 }
     case 'bottom':
-      return { x: x + CARD_WIDTH / 2, y: y + CARD_HEIGHT }
+      return { x: x + width / 2, y: y + height }
     case 'left':
-      return { x, y: y + CARD_HEIGHT / 2 }
+      return { x, y: y + height / 2 }
   }
 }
 
-export function endpointPoint(cards: CardMap, endpoint: EdgeEndpoint): Point | null {
+export function endpointPoint(
+  cards: CardMap,
+  endpoint: EdgeEndpoint,
+  sizes?: CardSizeMap,
+): Point | null {
   const card = cards[endpoint.cardId]
-  return card ? anchorPoint(card, endpoint.side) : null
+  return card ? anchorPoint(card, endpoint.side, sizeOf(sizes, card.id)) : null
 }
 
 export function oppositeSide(side: AnchorSide): AnchorSide {
@@ -143,12 +156,12 @@ export function arrowheadPath(tip: Point, side: AnchorSide, thickness: number) {
   ].join(' ')
 }
 
-function nearestSide(card: Card, world: Point): AnchorSide {
+function nearestSide(card: Card, world: Point, size?: CardSize): AnchorSide {
   let nearest: AnchorSide = 'top'
   let shortest = Infinity
 
   for (const side of ANCHOR_SIDES) {
-    const point = anchorPoint(card, side)
+    const point = anchorPoint(card, side, size)
     const distance = Math.hypot(world.x - point.x, world.y - point.y)
     if (distance < shortest) {
       shortest = distance
@@ -167,24 +180,26 @@ export function findDropTarget(
   cards: CardMap,
   world: Point,
   excludeCardId: string,
+  sizes?: CardSizeMap,
 ): EdgeEndpoint | null {
-  let best: { card: Card; distance: number } | null = null
+  let best: { card: Card; distance: number; size: CardSize } | null = null
 
   for (const card of Object.values(cards)) {
     if (card.id === excludeCardId) continue
 
+    const size = sizeOf(sizes, card.id)
     const { x, y } = card.position
     const withinReach =
       world.x >= x - DROP_MARGIN &&
-      world.x <= x + CARD_WIDTH + DROP_MARGIN &&
+      world.x <= x + size.width + DROP_MARGIN &&
       world.y >= y - DROP_MARGIN &&
-      world.y <= y + CARD_HEIGHT + DROP_MARGIN
+      world.y <= y + size.height + DROP_MARGIN
     if (!withinReach) continue
 
-    const distance = Math.hypot(world.x - (x + CARD_WIDTH / 2), world.y - (y + CARD_HEIGHT / 2))
-    if (!best || distance < best.distance) best = { card, distance }
+    const distance = Math.hypot(world.x - (x + size.width / 2), world.y - (y + size.height / 2))
+    if (!best || distance < best.distance) best = { card, distance, size }
   }
 
   if (!best) return null
-  return { cardId: best.card.id, side: nearestSide(best.card, world) }
+  return { cardId: best.card.id, side: nearestSide(best.card, world, best.size) }
 }

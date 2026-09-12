@@ -6,6 +6,7 @@ import {
   endpointPoint,
   oppositeSide,
   type CardMap,
+  type CardSizeMap,
 } from './edgeGeometry'
 import type { Point } from './useCamera'
 
@@ -26,6 +27,7 @@ const HALO_SPREAD = 6
 type EdgeLayerProps = {
   edges: readonly Edge[]
   cards: CardMap
+  sizes: CardSizeMap
   zoom: number
   draft: DraftEdge | null
   /** Maps an edge id to the color of whoever currently has it selected. */
@@ -37,12 +39,12 @@ type EdgeLayerProps = {
  * Renders every connector in one SVG. A 1x1 SVG with visible overflow lets paths use
  * raw world coordinates, including negative ones, on an unbounded canvas.
  */
-export function EdgeLayer({ edges, cards, zoom, draft, selection, onSelect }: EdgeLayerProps) {
+export function EdgeLayer({ edges, cards, sizes, zoom, draft, selection, onSelect }: EdgeLayerProps) {
   return (
     <svg className="edge-layer" width="1" height="1">
       {edges.map((edge) => {
-        const from = endpointPoint(cards, edge.from)
-        const to = endpointPoint(cards, edge.to)
+        const from = endpointPoint(cards, edge.from, sizes)
+        const to = endpointPoint(cards, edge.to, sizes)
         if (!from || !to) return null
 
         const path = edgePath(from, edge.from.side, to, edge.to.side)
@@ -91,16 +93,24 @@ export function EdgeLayer({ edges, cards, zoom, draft, selection, onSelect }: Ed
         )
       })}
 
-      {draft ? <DraftPath cards={cards} draft={draft} /> : null}
+      {draft ? <DraftPath cards={cards} sizes={sizes} draft={draft} /> : null}
     </svg>
   )
 }
 
-function DraftPath({ cards, draft }: { cards: CardMap; draft: DraftEdge }) {
-  const from = endpointPoint(cards, draft.from)
+function DraftPath({
+  cards,
+  sizes,
+  draft,
+}: {
+  cards: CardMap
+  sizes: CardSizeMap
+  draft: DraftEdge
+}) {
+  const from = endpointPoint(cards, draft.from, sizes)
   if (!from) return null
 
-  const to = draft.to ? endpointPoint(cards, draft.to) : draft.cursor
+  const to = draft.to ? endpointPoint(cards, draft.to, sizes) : draft.cursor
   if (!to) return null
 
   const toSide = draft.to ? draft.to.side : oppositeSide(draft.from.side)

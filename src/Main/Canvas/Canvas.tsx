@@ -8,6 +8,7 @@ import {
 } from '@liveblocks/react/suspense'
 import {
   Component,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -18,6 +19,7 @@ import {
 } from 'react'
 import type { AnchorSide, CanvasCategory, CanvasUser, CardContent, Edge, EdgeEndpoint, VoteValue } from '../../liveblocks/types'
 import { toggleCardVote } from '../../lib/cardVotes'
+import { edgeIdsAttachedTo } from '../../lib/removeCard'
 import { getVoterId } from '../../lib/voterId'
 import { defaultContentFor, parseCardKind } from '../cardContent'
 import { parseSuggestions, suggestionContent, SUGGESTION_MIME } from '../suggestions'
@@ -36,6 +38,9 @@ import {
   endpointPoint,
   findDropTarget,
   NEW_EDGE_ARROW,
+  sizeOf,
+  type CardSize,
+  type CardSizeMap,
 } from './edgeGeometry'
 import { RemoteCursor } from './RemoteCursor'
 import { screenToWorld, useCamera, worldToScreen } from './useCamera'
@@ -68,6 +73,7 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [dropActive, setDropActive] = useState(false)
   const [draft, setDraft] = useState<DraftEdge | null>(null)
+  const [cardSizes, setCardSizes] = useState<CardSizeMap>({})
 
   const { camera, canZoomIn, canZoomOut, panBy, zoomBy, zoomIn, zoomOut, resetCamera } =
     cameraControls
@@ -167,6 +173,28 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     storage.get('edges').delete(id)
   }, [])
 
+  const removeCard = useMutation(({ storage }, id: string) => {
+    const cards = storage.get('cards')
+    if (!cards.get(id)) return
+    const edges = storage.get('edges')
+    const attached: Edge[] = []
+    edges.forEach((edge) => attached.push(edge))
+    for (const edgeId of edgeIdsAttachedTo(attached, id)) {
+      edges.delete(edgeId)
+    }
+    cards.delete(id)
+  }, [])
+
+  const rememberCardSize = useCallback((id: string, size: CardSize) => {
+    setCardSizes((current) => {
+      const previous = current[id]
+      if (previous && previous.width === size.width && previous.height === size.height) {
+        return current
+      }
+      return { ...current, [id]: size }
+    })
+  }, [])
+
   /** Who is editing which card, keyed by card id, from everyone else's presence. */
   const editors = useMemo(() => {
     const claims: Record<string, { user: CanvasUser; connectionId: number }> = {}
@@ -205,6 +233,14 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     removeEdge(mySelectedEdgeId)
     updateMyPresence({ selectedEdgeId: null })
   }
+
+  const deleteCard = useCallback((id: string) => {
+    removeCard(id)
+    updateMyPresence({
+      selectedCardId: mySelectedCardId === id ? null : mySelectedCardId,
+      editingCardId: myEditingCardId === id ? null : myEditingCardId,
+    })
+  }, [removeCard, updateMyPresence, mySelectedCardId, myEditingCardId])
 
   // Scroll pans and ctrl/⌘+scroll (including trackpad pinch) zooms. Registered manually
   // because React's wheel listener is passive, so it cannot preventDefault page zoom.
@@ -257,24 +293,31 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     }
   }, [])
 
-  // Delete removes the selected connector. Only bound while something is selected, so
-  // it stays out of the way of the rest of the app.
+  // Delete removes the selected connector or card. Only bound while something is
+  // selected, so it stays out of the way of the rest of the app.
   useEffect(() => {
-    const selectedId = mySelectedEdgeId
-    if (!selectedId) return
+    const selectedEdgeId = mySelectedEdgeId
+    const selectedCardId = mySelectedCardId
+    if (!selectedEdgeId && !selectedCardId) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Delete' && event.key !== 'Backspace') return
       const target = event.target as HTMLElement | null
       if (target?.isContentEditable || target?.matches('input, textarea')) return
       event.preventDefault()
-      removeEdge(selectedId)
-      updateMyPresence({ selectedEdgeId: null })
+      if (selectedEdgeId) {
+        removeEdge(selectedEdgeId)
+        updateMyPresence({ selectedEdgeId: null })
+        return
+      }
+      if (selectedCardId) {
+        deleteCard(selectedCardId)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [mySelectedEdgeId, removeEdge, updateMyPresence])
+  }, [mySelectedEdgeId, mySelectedCardId, removeEdge, deleteCard, updateMyPresence])
 
   function startConnect(cardId: string, side: AnchorSide, event: PointerEvent<HTMLElement>) {
     const viewport = viewportRef.current
@@ -284,7 +327,7 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
     // Capturing on the viewport keeps move/up events coming here even once the pointer
     // leaves the source card, so the drop target can be resolved from the cursor.
     viewport.setPointerCapture(event.pointerId)
-    setDraft({ from: { cardId, side }, to: null, cursor: anchorPoint(card, side) })
+    setDraft({ from: { cardId, side }, to: null, cursor: anchorPoint(card, side, sizeOf(cardSizes, cardId)) })
     updateMyPresence({ selectedCardId: null, selectedEdgeId: null })
   }
 
@@ -318,7 +361,7 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
 
     setDraft((current) =>
       current
-        ? { ...current, cursor: world, to: findDropTarget(cards, world, current.from.cardId) }
+        ? { ...current, cursor: world, to: findDropTarget(cards, world, current.from.cardId, cardSizes) }
         : null,
     )
   }
@@ -412,12 +455,12 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
 
   const toolbarPosition = useMemo(() => {
     if (!selectedEdge) return null
-    const from = endpointPoint(cards, selectedEdge.from)
-    const to = endpointPoint(cards, selectedEdge.to)
+    const from = endpointPoint(cards, selectedEdge.from, cardSizes)
+    const to = endpointPoint(cards, selectedEdge.to, cardSizes)
     if (!from || !to) return null
     const midpoint = edgeMidpoint(from, selectedEdge.from.side, to, selectedEdge.to.side)
     return worldToScreen(camera, midpoint)
-  }, [selectedEdge, cards, camera])
+  }, [selectedEdge, cards, cardSizes, camera])
 
   return (
     <div
@@ -444,6 +487,7 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
         <EdgeLayer
           edges={Object.values(edges)}
           cards={cards}
+          sizes={cardSizes}
           zoom={camera.zoom}
           draft={draft}
           selection={edgeSelection}
@@ -472,6 +516,8 @@ export function Canvas({ category, cameraControls }: CanvasProps) {
               onEndEdit={stopEdit}
               onChangeText={updateCardText}
               onVote={(id, value) => setCardVote(id, getVoterId(), myUser.name, value)}
+              onDelete={deleteCard}
+              onResize={rememberCardSize}
             />
           </CardErrorBoundary>
         ))}

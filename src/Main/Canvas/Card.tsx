@@ -1,8 +1,8 @@
-import { useRef, useState, type PointerEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { scoreOf, voteOf } from '../../lib/cardVotes'
 import type { AnchorSide, CanvasUser, Card as CardData, VoteValue } from '../../liveblocks/types'
 import { CardBody } from './CardBody'
-import { ANCHOR_SIDES } from './edgeGeometry'
+import { ANCHOR_SIDES, type CardSize } from './edgeGeometry'
 
 type DragStart = {
   pointerX: number
@@ -32,6 +32,8 @@ type CardProps = {
   onEndEdit: () => void
   onChangeText: (id: string, text: string) => void
   onVote: (id: string, value: VoteValue) => void
+  onDelete: (id: string) => void
+  onResize: (id: string, size: CardSize) => void
 }
 
 export function Card({
@@ -52,9 +54,23 @@ export function Card({
   onEndEdit,
   onChangeText,
   onVote,
+  onDelete,
+  onResize,
 }: CardProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef<DragStart | null>(null)
   const [dragging, setDragging] = useState(false)
+
+  useLayoutEffect(() => {
+    const node = rootRef.current
+    if (!node) return
+
+    const report = () => onResize(card.id, { width: node.offsetWidth, height: node.offsetHeight })
+    report()
+    const observer = new ResizeObserver(report)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [card.id, onResize])
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || panMode) return
@@ -111,6 +127,7 @@ export function Card({
     dragging ? 'card-dragging' : '',
     showAnchors ? 'card-anchored' : '',
     editing ? 'card-editing' : '',
+    selectedByMe ? 'card-selected' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -119,6 +136,7 @@ export function Card({
 
   return (
     <div
+      ref={rootRef}
       className={className}
       style={{
         transform: `translate(${card.position.x}px, ${card.position.y}px)`,
@@ -168,6 +186,18 @@ export function Card({
           {selectedByOthers.map((user) => user.name).join(', ')}
         </span>
       ) : null}
+
+      <button
+        type="button"
+        className="card-delete"
+        aria-label="Delete card"
+        style={{ transform: `scale(${1 / zoom})` }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onClick={() => onDelete(card.id)}
+      >
+        <DeleteIcon />
+      </button>
 
       {ANCHOR_SIDES.map((side) => (
         <button
@@ -233,6 +263,21 @@ function CardVoteRail({
         <VoteChevron direction="down" />
       </button>
     </div>
+  )
+}
+
+function DeleteIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M3 5h10M6.5 5V3.5h3V5M4.5 5l.6 8h5.8l.6-8M6.8 7.2v3.6M9.2 7.2v3.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 
