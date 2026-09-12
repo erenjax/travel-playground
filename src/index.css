@@ -6,6 +6,9 @@
   --canvas-bg: #fafafa;
   --canvas-dot: #dedde1;
   --code-bg: #f4f3ec;
+  --accent: #0284c7;
+  --danger: #e11d48;
+  --danger-bg: #fee2e2;
   --shadow: rgba(0, 0, 0, 0.08) 0 4px 12px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;

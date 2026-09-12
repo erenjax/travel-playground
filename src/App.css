@@ -331,6 +331,178 @@
   white-space: nowrap;
 }
 
+/* Connector anchors */
+
+.card-anchor {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--text-h);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  cursor: crosshair;
+  /* Hidden rather than transparent so it cannot swallow clicks meant for the card. */
+  visibility: hidden;
+}
+
+.card-anchor-top {
+  left: 50%;
+  top: 0;
+}
+
+.card-anchor-right {
+  left: 100%;
+  top: 50%;
+}
+
+.card-anchor-bottom {
+  left: 50%;
+  top: 100%;
+}
+
+.card-anchor-left {
+  left: 0;
+  top: 50%;
+}
+
+.card:hover .card-anchor,
+.card-anchored .card-anchor {
+  visibility: visible;
+}
+
+.card-anchor:hover {
+  background: var(--accent);
+}
+
+.card-dragging .card-anchor,
+.canvas-pan-ready .card-anchor,
+.canvas-panning .card-anchor {
+  visibility: hidden;
+}
+
+/* Connectors */
+
+.edge-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Lets paths draw in raw world coordinates well outside the 1x1 viewport box. */
+  overflow: visible;
+  pointer-events: none;
+}
+
+.edge-line,
+.edge-halo,
+.edge-draft {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.edge-halo {
+  opacity: 0.35;
+}
+
+.edge-arrow {
+  stroke: none;
+}
+
+.edge-draft {
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+  opacity: 0.7;
+}
+
+/* A fat transparent stroke so thin connectors stay easy to click. */
+.edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+/* Edge toolbar */
+
+.edge-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  user-select: none;
+}
+
+.edge-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.edge-toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+.edge-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.edge-swatch-active {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 3.5px var(--text-h);
+}
+
+.edge-tool {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.edge-tool:hover {
+  background: var(--canvas-bg);
+}
+
+.edge-tool-active {
+  background: var(--canvas-bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-h);
+}
+
+.edge-weight span {
+  width: 14px;
+  border-radius: 999px;
+  background: var(--text-h);
+}
+
+.edge-delete:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 /* Side tab */
 
 .side-tab {

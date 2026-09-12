@@ -6,7 +6,7 @@ import { NameGate } from './Main/Onboarding/NameGate'
 import { useDisplayName } from './hooks/useDisplayName'
 import { getUserColor } from './lib/userColor'
 import { LIVEBLOCKS_PUBLIC_KEY, ROOM_ID } from './liveblocks/client'
-import type { Card } from './liveblocks/types'
+import type { Card, Edge } from './liveblocks/types'
 import './App.css'
 
 function MissingKeyNotice() {
@@ -52,10 +52,12 @@ export default function App() {
         initialPresence={{
           cursor: null,
           selectedCardId: null,
+          selectedEdgeId: null,
           user: { name: displayName, color: getUserColor(displayName) },
         }}
         initialStorage={{
           cards: new LiveMap<string, Card>(),
+          edges: new LiveMap<string, Edge>(),
           tripTitle: 'Untitled trip',
         }}
       >

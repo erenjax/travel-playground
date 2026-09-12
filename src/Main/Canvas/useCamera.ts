@@ -27,6 +27,14 @@ export function screenToWorld(camera: Camera, screen: Point): Point {
   }
 }
 
+/** Converts a world-space point to viewport space, for overlays outside the world layer. */
+export function worldToScreen(camera: Camera, world: Point): Point {
+  return {
+    x: world.x * camera.zoom + camera.x,
+    y: world.y * camera.zoom + camera.y,
+  }
+}
+
 /** Zooms to `zoom` while keeping `anchor` (viewport space) over the same world point. */
 function zoomAround(camera: Camera, zoom: number, anchor: Point): Camera {
   const next = clampZoom(zoom)

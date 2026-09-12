@@ -10,17 +10,30 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type PointerEvent,
 } from 'react'
+import type { AnchorSide, Edge, EdgeEndpoint } from '../../liveblocks/types'
 import { Card } from './Card'
+import { EdgeLayer, type DraftEdge } from './EdgeLayer'
+import { EdgeToolbar } from './EdgeToolbar'
+import {
+  anchorPoint,
+  CARD_HEIGHT,
+  CARD_WIDTH,
+  DEFAULT_EDGE_COLOR,
+  DEFAULT_EDGE_THICKNESS,
+  edgeMidpoint,
+  endpointPoint,
+  findDropTarget,
+  NEW_EDGE_ARROW,
+} from './edgeGeometry'
 import { RemoteCursor } from './RemoteCursor'
-import { screenToWorld, useCamera } from './useCamera'
+import { screenToWorld, useCamera, worldToScreen } from './useCamera'
 import { ZoomControls } from './ZoomControls'
 
-const CARD_WIDTH = 160
-const CARD_HEIGHT = 56
 const GRID_SIZE = 24
 
 /** A pan shorter than this still counts as a click, so clicking empty space deselects. */
@@ -41,15 +54,18 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
   const panStart = useRef<PanStart | null>(null)
   const [panning, setPanning] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
+  const [draft, setDraft] = useState<DraftEdge | null>(null)
 
   const { camera, canZoomIn, canZoomOut, panBy, zoomBy, zoomIn, zoomOut, resetCamera } =
     useCamera()
 
   const cards = useStorage((root) => root.cards)
+  const edges = useStorage((root) => root.edges)
   const others = useOthers()
   const updateMyPresence = useUpdateMyPresence()
   const myUser = useSelf((me) => me.presence.user, shallow)
   const mySelectedCardId = useSelf((me) => me.presence.selectedCardId)
+  const mySelectedEdgeId = useSelf((me) => me.presence.selectedEdgeId)
 
   const addCard = useMutation(
     ({ storage }) => {
@@ -82,6 +98,46 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
     if (!card) return
     cards.set(id, { ...card, position: { x, y } })
   }, [])
+
+  const addEdge = useMutation(({ storage }, from: EdgeEndpoint, to: EdgeEndpoint) => {
+    const id = crypto.randomUUID()
+    storage.get('edges').set(id, {
+      id,
+      from,
+      to,
+      color: DEFAULT_EDGE_COLOR,
+      thickness: DEFAULT_EDGE_THICKNESS,
+      arrow: NEW_EDGE_ARROW,
+    })
+  }, [])
+
+  const styleEdge = useMutation(
+    ({ storage }, id: string, patch: Partial<Pick<Edge, 'color' | 'thickness' | 'arrow'>>) => {
+      const edges = storage.get('edges')
+      const edge = edges.get(id)
+      if (!edge) return
+      edges.set(id, { ...edge, ...patch })
+    },
+    [],
+  )
+
+  /** Reverses direction, which is what turns a head at `to` into a head at `from`. */
+  const flipEdge = useMutation(({ storage }, id: string) => {
+    const edges = storage.get('edges')
+    const edge = edges.get(id)
+    if (!edge) return
+    edges.set(id, { ...edge, from: edge.to, to: edge.from })
+  }, [])
+
+  const removeEdge = useMutation(({ storage }, id: string) => {
+    storage.get('edges').delete(id)
+  }, [])
+
+  function deleteSelectedEdge() {
+    if (!mySelectedEdgeId) return
+    removeEdge(mySelectedEdgeId)
+    updateMyPresence({ selectedEdgeId: null })
+  }
 
   // Scroll pans and ctrl/⌘+scroll (including trackpad pinch) zooms. Registered manually
   // because React's wheel listener is passive, so it cannot preventDefault page zoom.
@@ -134,6 +190,37 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
     }
   }, [])
 
+  // Delete removes the selected connector. Only bound while something is selected, so
+  // it stays out of the way of the rest of the app.
+  useEffect(() => {
+    const selectedId = mySelectedEdgeId
+    if (!selectedId) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+      const target = event.target as HTMLElement | null
+      if (target?.isContentEditable || target?.matches('input, textarea')) return
+      event.preventDefault()
+      removeEdge(selectedId)
+      updateMyPresence({ selectedEdgeId: null })
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [mySelectedEdgeId, removeEdge, updateMyPresence])
+
+  function startConnect(cardId: string, side: AnchorSide, event: PointerEvent<HTMLElement>) {
+    const viewport = viewportRef.current
+    const card = cards[cardId]
+    if (!viewport || !card) return
+
+    // Capturing on the viewport keeps move/up events coming here even once the pointer
+    // leaves the source card, so the drop target can be resolved from the cursor.
+    viewport.setPointerCapture(event.pointerId)
+    setDraft({ from: { cardId, side }, to: null, cursor: anchorPoint(card, side) })
+    updateMyPresence({ selectedCardId: null, selectedEdgeId: null })
+  }
+
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     const middleClick = event.button === 1
     if (event.button !== 0 && !middleClick) return
@@ -161,19 +248,34 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
       y: event.clientY - rect.top,
     })
     updateMyPresence({ cursor: { x: Math.round(world.x), y: Math.round(world.y) } })
+
+    setDraft((current) =>
+      current
+        ? { ...current, cursor: world, to: findDropTarget(cards, world, current.from.cardId) }
+        : null,
+    )
   }
 
-  function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
+  /** `commit` is false for a cancelled pointer, which should discard the drag instead. */
+  function finishPointer(event: PointerEvent<HTMLDivElement>, commit: boolean) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+
+    // A connector drag never starts a pan, so it is resolved before the pan bookkeeping.
+    if (draft) {
+      setDraft(null)
+      if (commit && draft.to) addEdge(draft.from, draft.to)
+      return
+    }
+
     const start = panStart.current
     if (!start) return
 
     panStart.current = null
     setPanning(false)
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-    if (!start.moved && event.button === 0) {
-      updateMyPresence({ selectedCardId: null })
+    if (commit && !start.moved && event.button === 0) {
+      updateMyPresence({ selectedCardId: null, selectedEdgeId: null })
     }
   }
 
@@ -183,6 +285,27 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
     : spaceHeld
       ? 'canvas canvas-pan-ready'
       : 'canvas'
+
+  const selectedEdge = mySelectedEdgeId ? edges[mySelectedEdgeId] : undefined
+
+  /** Halo color per selected edge, so other people's selections are visible too. */
+  const edgeSelection = useMemo(() => {
+    const colors: Record<string, string> = {}
+    for (const { presence } of others) {
+      if (presence.selectedEdgeId) colors[presence.selectedEdgeId] = presence.user.color
+    }
+    if (mySelectedEdgeId) colors[mySelectedEdgeId] = myUser.color
+    return colors
+  }, [others, mySelectedEdgeId, myUser.color])
+
+  const toolbarPosition = useMemo(() => {
+    if (!selectedEdge) return null
+    const from = endpointPoint(cards, selectedEdge.from)
+    const to = endpointPoint(cards, selectedEdge.to)
+    if (!from || !to) return null
+    const midpoint = edgeMidpoint(from, selectedEdge.from.side, to, selectedEdge.to.side)
+    return worldToScreen(camera, midpoint)
+  }, [selectedEdge, cards, camera])
 
   return (
     <div
@@ -194,14 +317,23 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerUp={(event) => finishPointer(event, true)}
+      onPointerCancel={(event) => finishPointer(event, false)}
       onPointerLeave={() => updateMyPresence({ cursor: null })}
     >
       <div
         className="canvas-world"
         style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}
       >
+        <EdgeLayer
+          edges={Object.values(edges)}
+          cards={cards}
+          zoom={camera.zoom}
+          draft={draft}
+          selection={edgeSelection}
+          onSelect={(id) => updateMyPresence({ selectedEdgeId: id, selectedCardId: null })}
+        />
+
         {Object.values(cards).map((card) => (
           <Card
             key={card.id}
@@ -209,12 +341,14 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
             myColor={myUser.color}
             zoom={camera.zoom}
             panMode={panMode}
+            showAnchors={draft !== null}
             selectedByMe={mySelectedCardId === card.id}
             selectedByOthers={others
               .filter(({ presence }) => presence.selectedCardId === card.id)
               .map(({ presence }) => presence.user)}
-            onSelect={(id) => updateMyPresence({ selectedCardId: id })}
+            onSelect={(id) => updateMyPresence({ selectedCardId: id, selectedEdgeId: null })}
             onMove={moveCard}
+            onStartConnect={startConnect}
           />
         ))}
 
@@ -231,6 +365,19 @@ export const Canvas = forwardRef<CanvasHandle>(function Canvas(_props, ref) {
           ) : null,
         )}
       </div>
+
+      {selectedEdge && toolbarPosition && !draft ? (
+        <EdgeToolbar
+          edge={selectedEdge}
+          x={toolbarPosition.x}
+          y={toolbarPosition.y}
+          onChangeColor={(color) => styleEdge(selectedEdge.id, { color })}
+          onChangeThickness={(thickness) => styleEdge(selectedEdge.id, { thickness })}
+          onChangeArrow={(arrow) => styleEdge(selectedEdge.id, { arrow })}
+          onFlip={() => flipEdge(selectedEdge.id)}
+          onDelete={deleteSelectedEdge}
+        />
+      ) : null}
 
       <ZoomControls
         zoom={camera.zoom}
