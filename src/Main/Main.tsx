@@ -1,16 +1,87 @@
-import { useState, type CSSProperties } from 'react'
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useUpdateMyPresence } from '@liveblocks/react/suspense'
+import type { CanvasCategory } from '../liveblocks/types'
 import { Canvas } from './Canvas/Canvas'
+import { useCamera } from './Canvas/useCamera'
 import { SideTab } from './Bars/SideTab'
+import { CATEGORIES } from './categories'
 
 export function Main() {
   const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [category, setCategory] = useState<CanvasCategory>('Hotels')
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const updateMyPresence = useUpdateMyPresence()
+  const cameraControls = useCamera(category)
+
+  function selectCategory(next: CanvasCategory) {
+    if (next === category) return
+    updateMyPresence({
+      activeCategory: next,
+      cursor: null,
+      selectedCardId: null,
+      selectedEdgeId: null,
+      editingCardId: null,
+    })
+    setCategory(next)
+  }
+
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next: number
+    switch (event.key) {
+      case 'ArrowRight': next = (index + 1) % CATEGORIES.length; break
+      case 'ArrowLeft': next = (index + CATEGORIES.length - 1) % CATEGORIES.length; break
+      case 'Home': next = 0; break
+      case 'End': next = CATEGORIES.length - 1; break
+      default: return
+    }
+    event.preventDefault()
+    selectCategory(CATEGORIES[next])
+    tabRefs.current[next]?.focus()
+  }
 
   return (
     <div className="app">
-      <div className="app-body" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
-        <Canvas />
-        <SideTab width={sidebarWidth} onResize={setSidebarWidth} />
-      </div>
+      <header className="canvas-top-bar">
+        <span className="canvas-top-bar-label">Canvases</span>
+        <div className="canvas-tabs" role="tablist" aria-label="Travel canvases">
+          {CATEGORIES.map((item, index) => (
+            <button
+              key={item}
+              ref={(element) => { tabRefs.current[index] = element }}
+              type="button"
+              role="tab"
+              id={`canvas-tab-${item}`}
+              aria-controls={`canvas-panel-${item}`}
+              aria-selected={category === item}
+              tabIndex={category === item ? 0 : -1}
+              className="canvas-tab"
+              onClick={() => selectCategory(item)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </header>
+      {CATEGORIES.map((item) => (
+        <div
+          key={item}
+          className="app-body"
+          role="tabpanel"
+          id={`canvas-panel-${item}`}
+          aria-labelledby={`canvas-tab-${item}`}
+          hidden={category !== item}
+          tabIndex={0}
+          style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
+        >
+          {category === item && (
+            <>
+              <Canvas category={item} cameraControls={cameraControls} />
+              <SideTab category={item} width={sidebarWidth} onResize={setSidebarWidth} />
+            </>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

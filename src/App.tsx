@@ -50,6 +50,7 @@ export default function App() {
       <RoomProvider
         id={ROOM_ID}
         initialPresence={{
+          activeCategory: 'Hotels',
           cursor: null,
           selectedCardId: null,
           selectedEdgeId: null,

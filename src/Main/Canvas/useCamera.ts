@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type SetStateAction } from 'react'
+import type { CanvasCategory } from '../../liveblocks/types'
 
 export type Camera = {
   /** Screen-space offset, in pixels, of the world origin. */
@@ -46,22 +47,33 @@ function zoomAround(camera: Camera, zoom: number, anchor: Point): Camera {
   }
 }
 
-export function useCamera() {
-  const [camera, setCamera] = useState<Camera>(INITIAL_CAMERA)
+export function useCamera(category: CanvasCategory) {
+  const [cameras, setCameras] = useState<Record<CanvasCategory, Camera>>({
+    Hotels: INITIAL_CAMERA,
+    Attractions: INITIAL_CAMERA,
+    Food: INITIAL_CAMERA,
+  })
+  const camera = cameras[category]
+  const setCamera = useCallback((update: SetStateAction<Camera>) => {
+    setCameras((current) => ({
+      ...current,
+      [category]: typeof update === 'function' ? update(current[category]) : update,
+    }))
+  }, [category])
 
   const panBy = useCallback((dx: number, dy: number) => {
     setCamera((current) => ({ ...current, x: current.x + dx, y: current.y + dy }))
-  }, [])
+  }, [setCamera])
 
   const zoomBy = useCallback((factor: number, anchor: Point) => {
     setCamera((current) => zoomAround(current, current.zoom * factor, anchor))
-  }, [])
+  }, [setCamera])
 
   const zoomIn = useCallback((anchor: Point) => zoomBy(ZOOM_STEP, anchor), [zoomBy])
 
   const zoomOut = useCallback((anchor: Point) => zoomBy(1 / ZOOM_STEP, anchor), [zoomBy])
 
-  const resetCamera = useCallback(() => setCamera(INITIAL_CAMERA), [])
+  const resetCamera = useCallback(() => setCamera(INITIAL_CAMERA), [setCamera])
 
   return {
     camera,

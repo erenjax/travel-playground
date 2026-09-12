@@ -5,7 +5,10 @@ export type CanvasUser = {
   color: string
 }
 
+export type CanvasCategory = 'Hotels' | 'Attractions' | 'Food'
+
 export type Presence = {
+  activeCategory?: CanvasCategory
   cursor: { x: number; y: number } | null
   selectedCardId: string | null
   selectedEdgeId: string | null
