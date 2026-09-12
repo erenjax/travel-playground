@@ -276,7 +276,7 @@ export function Main() {
           )}
         </div>
       ))}
-      {itinerary && <div className="app-body itinerary-body" hidden={category !== 'Itinerary'}><ItineraryCanvas itinerary={itinerary} cards={cards} /></div>}
+      {itinerary && <div className="app-body itinerary-body" hidden={category !== 'Itinerary'}><ItineraryCanvas itinerary={itinerary} cards={cards} tripTitle={tripTitle || 'Untitled trip'} placeLabel={placeLabel} dateLabel={dateLabel} participants={[myUser, ...others.map(({ presence }) => presence.user)]} /></div>}
       <LiveChat />
     </div>
   )
@@ -297,7 +297,7 @@ function contenderName(content: CardData['content']) {
   }
 }
 
-function ItineraryCanvas({ itinerary, cards }: { itinerary: Itinerary; cards: Record<string, CardData> }) {
+function ItineraryCanvas({ itinerary, cards, tripTitle, placeLabel, dateLabel, participants }: { itinerary: Itinerary; cards: Record<string, CardData>; tripTitle: string; placeLabel: string; dateLabel: string; participants: { name: string }[] }) {
   const [days, setDays] = useState(itinerary.days)
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null)
   useEffect(() => setDays(itinerary.days), [itinerary.days])
@@ -319,6 +319,9 @@ function ItineraryCanvas({ itinerary, cards }: { itinerary: Itinerary; cards: Re
 
   return (
     <div className="itinerary-canvas">
+      <button type="button" className="itinerary-download" onClick={() => downloadItineraryPdf({ itinerary: { days }, tripTitle, placeLabel, dateLabel, participants })}>
+        Download PDF
+      </button>
       <div className="itinerary-columns">
         {days.map((day) => (
           <section className="itinerary-column" key={day.date} onDragOver={(event) => event.preventDefault()} onDrop={() => moveCard(day.date)}>
@@ -335,4 +338,45 @@ function ItineraryCanvas({ itinerary, cards }: { itinerary: Itinerary; cards: Re
       </div>
     </div>
   )
+}
+
+function downloadItineraryPdf({ itinerary, tripTitle, placeLabel, dateLabel, participants }: { itinerary: Itinerary; tripTitle: string; placeLabel: string; dateLabel: string; participants: { name: string }[] }) {
+  const lines = [tripTitle, placeLabel, dateLabel, `People: ${participants.map((person) => person.name).join(', ')}`, '']
+  itinerary.days.forEach((day) => {
+    lines.push(`${day.date} — ${day.title}`)
+    day.activities.forEach((activity) => lines.push(`  ${activity.name}: ${activity.note}`))
+    lines.push('')
+  })
+  const pdf = createTextPdf(lines.flatMap((line) => wrapPdfLine(line, 92)))
+  const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${tripTitle.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'itinerary'}.pdf`
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function wrapPdfLine(value: string, width: number) {
+  const text = value.replace(/[^\x20-\x7E]/g, '-').trimEnd()
+  if (!text) return ['']
+  const lines: string[] = []
+  for (let start = 0; start < text.length; start += width) lines.push(text.slice(start, start + width))
+  return lines
+}
+
+function createTextPdf(lines: string[]) {
+  const content = ['BT', '/F1 12 Tf', '50 760 Td', ...lines.map((line) => `(${line.replace(/[\\()]/g, '\\$&')}) Tj 0 -16 Td`), 'ET'].join('\n')
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ]
+  let pdf = '%PDF-1.4\n'
+  const offsets = [0]
+  objects.forEach((object, index) => { offsets[index + 1] = pdf.length; pdf += `${index + 1} 0 obj\n${object}\nendobj\n` })
+  const xref = pdf.length
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`
+  return pdf
 }
