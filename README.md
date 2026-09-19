@@ -1,4 +1,4 @@
-# TripJam
+# TripJam - CMU Hackathon 2026
 
 <img width="5088" height="3344" alt="image" src="https://github.com/user-attachments/assets/4b6e32d9-177c-402b-94a3-919136b57bcb" />
 
